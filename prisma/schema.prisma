@@ -1,0 +1,115 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// FIVE TABLES, each with its rich data in one JSON column.
+//
+// Foreign keys are RESTRICT everywhere — once schedules and flows exist they
+// are permanent. Schedules carry the fire history (every CheckoutChamp
+// attempt is appended to fire_attempts as a JSON entry). The user rule is:
+// do not delete any transactions. Restrict enforces that at the DB level.
+//
+//   cards       (identity, deduped on identity_key)
+//   accounts    (CC tenant credentials)
+//   flow        (self-contained: cc_gateway + cc_campaign + cc_products live
+//                inside flow_settings; no separate "preset" table)
+//   schedules   (one row per intended fire — holds fire_plan + fire_attempts)
+//   admin_users (Trinity logins)
+// ---------------------------------------------------------------------------
+
+model AdminUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("admin_users")
+}
+
+model Account {
+  id                String     @id @default(uuid())
+  name              String
+  apiUrl            String     @map("api_url")
+  loginIdEncrypted  String     @map("login_id_encrypted")
+  passwordEncrypted String     @map("password_encrypted")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  flows             Flow[]
+
+  @@map("accounts")
+}
+
+model Card {
+  id          String     @id @default(uuid())
+  /// lower(first_name)|lower(last_name)|pan_last4|exp_month|exp_year
+  identityKey String     @unique @map("identity_key")
+  panLast4    String     @map("pan_last4")
+  /// Single JSON blob:
+  ///   { cardholder: { first_name, last_name },
+  ///     card: { pan_encrypted, cvv_encrypted, exp_month, exp_year },
+  ///     billing_address: { street, city, state, zip_code },
+  ///     contact: { phone, email, ip_address },
+  ///     source_file, created_at }
+  cardData    String     @map("card_data")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  schedules   Schedule[]
+
+  @@index([panLast4])
+  @@map("cards")
+}
+
+model Flow {
+  id           String     @id @default(uuid())
+  name         String
+  accountId    String     @map("account_id")
+  account      Account    @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  /// Single JSON blob — fully self-contained, no FK to a "preset" table:
+  ///   { schedule_window: { start_date, end_date },
+  ///     lifecycle: { status: 'active'|'paused'|'completed', paused_at, last_charged_at },
+  ///     cc_gateway: { id, name },
+  ///     cc_campaign: { id, name },
+  ///     cc_products: [{ id, name, price, count }],
+  ///     total_cards,
+  ///     created_at }
+  flowSettings String     @map("flow_settings")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  schedules    Schedule[]
+
+  @@map("flow")
+}
+
+model Schedule {
+  id           String    @id @default(uuid())
+  cardId       String    @map("card_id")
+  card         Card      @relation(fields: [cardId], references: [id], onDelete: Restrict)
+  flowId       String    @map("flow_id")
+  flow         Flow      @relation(fields: [flowId], references: [id], onDelete: Restrict)
+  scheduledFor DateTime  @map("scheduled_for")
+  /// pending → processing → fired (lifecycle only — CC verdict lives on `success`)
+  status       String    @default("pending")
+  firedAt      DateTime? @map("fired_at")
+  orderId      String?   @map("order_id")
+  /// Ticked only after a successful CC fire. Stays false through pending/processing
+  /// and stays false on rows whose attempts all failed.
+  success      Boolean   @default(false)
+  /// Snapshot of the intended fire at schedule-creation time. Never changes after.
+  /// Shape: { product_id, product_name, price, cc_gateway_id }
+  firePlan     String    @map("fire_plan")
+  /// Append-only JSON array. Each entry is one CheckoutChamp /order/import/ call:
+  ///   { fired_at, order_id, success, amount_paid, actual_cc_gateway_id, cascade_used,
+  ///     cc_response: { code, message, raw } }
+  /// Retries push new entries; old attempts stay for the audit trail.
+  fireAttempts String    @default("[]") @map("fire_attempts")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([status, scheduledFor])
+  @@index([flowId])
+  @@index([cardId])
+  @@map("schedules")
+}

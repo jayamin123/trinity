@@ -1,0 +1,27 @@
+node_modules/
+.next/
+.open-next/
+.wrangler/
+.env
+.env.local
+.env.*.local
+dev.db
+dev.db-journal
+prisma/dev.db
+prisma/dev.db-journal
+uploads/
+playwright-report/
+test-results/
+
+# Build caches / generated
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Prisma generated
+src/generated/

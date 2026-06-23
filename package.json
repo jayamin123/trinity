@@ -1,0 +1,60 @@
+{
+  "name": "trinity-flows",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3040",
+    "build": "next build",
+    "start": "next start -p 3040",
+    "lint": "eslint",
+    "seed": "tsx prisma/seed.ts",
+    "test:e2e": "playwright test",
+    "test:cc": "tsx scripts/test-cc-connection.ts",
+    "cf:build": "opennextjs-cloudflare build && node scripts/patch-worker-cron.mjs",
+    "cf:preview": "opennextjs-cloudflare preview",
+    "cf:deploy": "npm run cf:build && wrangler deploy"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@emotion/cache": "^11.13.5",
+    "@emotion/react": "^11.13.5",
+    "@emotion/styled": "^11.13.5",
+    "@mui/icons-material": "^6.1.10",
+    "@mui/material": "^6.1.10",
+    "@mui/x-data-grid": "^7.23.2",
+    "@prisma/adapter-better-sqlite3": "^6.19.3",
+    "@prisma/adapter-d1": "^6.19.3",
+    "@prisma/client": "^6.19.3",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.10.0",
+    "dayjs": "^1.11.13",
+    "dotenv": "^17.4.2",
+    "jsonwebtoken": "^9.0.3",
+    "next": "^15.5.16",
+    "node-cron": "^3.0.3",
+    "papaparse": "^5.5.3",
+    "prisma": "^6.19.3",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260523.1",
+    "@opennextjs/cloudflare": "^1.19.11",
+    "@playwright/test": "^1.49.1",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20",
+    "@types/node-cron": "^3.0.11",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "^15.5.16",
+    "tsx": "^4.21.0",
+    "typescript": "^5",
+    "wrangler": "^4.94.0"
+  }
+}

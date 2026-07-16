@@ -1,8 +1,10 @@
 "use client";
 import { DataGrid, GridColDef, GridToolbarContainer, GridToolbarExport } from "@mui/x-data-grid";
 import { Chip } from "@mui/material";
+import { useState } from "react";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
+import FireAttemptsModal from "../flows/[id]/FireAttemptsModal";
 dayjs.extend(utc);
 
 const columns: GridColDef[] = [
@@ -24,16 +26,25 @@ const columns: GridColDef[] = [
 ];
 
 export default function ActivityTable({ rows }: { rows: Record<string, unknown>[] }) {
+  const [openScheduleId, setOpenScheduleId] = useState<string | null>(null);
   return (
-    <DataGrid
-      rows={rows}
-      columns={columns}
-      initialState={{ pagination: { paginationModel: { pageSize: 50 } } }}
-      pageSizeOptions={[25, 50, 100]}
-      disableRowSelectionOnClick
-      slots={{ toolbar: ExportToolbar }}
-      sx={{ bgcolor: "white" }}
-    />
+    <>
+      <DataGrid
+        rows={rows}
+        columns={columns}
+        initialState={{ pagination: { paginationModel: { pageSize: 50 } } }}
+        pageSizeOptions={[25, 50, 100]}
+        disableRowSelectionOnClick
+        onRowClick={(p) => setOpenScheduleId(p.id as string)}
+        slots={{ toolbar: ExportToolbar }}
+        sx={{ bgcolor: "white", "& .MuiDataGrid-row": { cursor: "pointer" } }}
+      />
+      <FireAttemptsModal
+        open={openScheduleId !== null}
+        scheduleId={openScheduleId}
+        onClose={() => setOpenScheduleId(null)}
+      />
+    </>
   );
 }
 

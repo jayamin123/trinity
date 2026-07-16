@@ -2,6 +2,7 @@ import { Box, Typography, Alert, Stack, Tooltip } from "@mui/material";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { db } from "@/lib/db";
 import { parseFireAttempts, parseFirePlan } from "@/lib/flows";
+import { cardBalance, scheduleConsumesBalance } from "@/lib/balance";
 import CardsTable, { type CardRow, type CardCounts, type Status, type CCVerdict } from "./CardsTable";
 import UploadForm from "./UploadForm";
 
@@ -42,6 +43,14 @@ export default async function CardsPage({
     const amount = (data.amount ?? null) as CardRow["amount"];
 
     const schedules = schedulesByCard.get(c.id) ?? [];
+
+    // Balance consumed = sum of live charge prices (pending/processing/succeeded).
+    const committed = schedules.reduce((sum, s) => {
+      if (!scheduleConsumesBalance(s.status, s.success)) return sum;
+      const price = parseFirePlan(s.firePlan).price;
+      return sum + (Number.isFinite(price) ? price : 0);
+    }, 0);
+    const { overBalance } = cardBalance(amount, committed);
 
     // Most recent FIRED schedule (status === 'fired').
     const firedSchedules = schedules.filter(s => s.status === "fired");
@@ -97,6 +106,8 @@ export default async function CardsPage({
       last4: c.panLast4,
       name,
       amount,
+      committed,
+      overBalance,
       source: sourceFile,
       status,
       firedAtIso,

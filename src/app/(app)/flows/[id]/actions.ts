@@ -7,7 +7,7 @@ import {
 import { pullAvailableForFlow } from "@/lib/cards";
 import { randomDailyCounts, stratifiedTimesForDay } from "@/lib/schedule";
 import { nowBkk, calendarDateBkk } from "@/lib/bkk";
-import { listProducts as listCCProducts, listGateways } from "@/lib/checkoutchamp";
+import { listProducts as listCCProducts, listGateways, listCampaigns as listCCCampaigns } from "@/lib/checkoutchamp";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -464,14 +464,14 @@ export async function deleteProductFromFlow(flowId: string, productId: string) {
   revalidatePath(`/flows/${flowId}`);
 }
 
-/** Re-pull the CC campaign and sync product name + price onto the flow's stored
- *  cc_products — for when the campaign is edited in CheckoutChamp (e.g. a price
- *  change) after the flow was built. Matches by product id: updates existing
- *  entries in place (count untouched) and appends products newly added to the
- *  campaign with count 0. Products no longer on the campaign are LEFT ALONE —
- *  they may still be referenced by schedules; removal stays the guarded manual
- *  action (deleteProductFromFlow). Returns the fresh list so an open dialog can
- *  reflect it without a reload. */
+/** Re-pull the CC campaign and sync it onto the stored flow_settings when it
+ *  differs — for when the campaign is edited in CheckoutChamp after the flow was
+ *  built. Updates the campaign NAME if it changed, and each product's name +
+ *  price (matched by id; count untouched), and appends products newly added to
+ *  the campaign with count 0. Products no longer on the campaign are LEFT ALONE
+ *  — they may still be referenced by schedules; removal stays the guarded manual
+ *  action (deleteProductFromFlow). Persists to the DB JSON. Returns the fresh
+ *  product list so an open dialog can reflect it without a reload. */
 export async function refreshFlowProducts(flowId: string): Promise<CCProduct[]> {
   const flow = await db.flow.findUnique({
     where: { id: flowId },
@@ -480,14 +480,21 @@ export async function refreshFlowProducts(flowId: string): Promise<CCProduct[]> 
   if (!flow) throw new Error("Flow not found");
 
   const settings = parseFlowSettings(flow.flowSettings);
-  const catalog = await listCCProducts(
-    {
-      apiUrl: flow.account.apiUrl,
-      loginId: flow.account.loginIdEncrypted,
-      password: flow.account.passwordEncrypted,
-    },
-    settings.cc_campaign.id,
-  );
+  const creds = {
+    apiUrl: flow.account.apiUrl,
+    loginId: flow.account.loginIdEncrypted,
+    password: flow.account.passwordEncrypted,
+  };
+  const [catalog, campaigns] = await Promise.all([
+    listCCProducts(creds, settings.cc_campaign.id),
+    listCCCampaigns(creds),
+  ]);
+
+  // Sync the campaign name if CheckoutChamp renamed it.
+  const freshCampaign = campaigns.find(c => c.id === settings.cc_campaign.id);
+  if (freshCampaign && freshCampaign.name && freshCampaign.name !== settings.cc_campaign.name) {
+    settings.cc_campaign.name = freshCampaign.name;
+  }
 
   for (const fresh of catalog) {
     const existing = settings.cc_products.find(p => p.id === fresh.id);

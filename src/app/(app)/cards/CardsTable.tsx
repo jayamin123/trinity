@@ -1,5 +1,5 @@
 "use client";
-import { Box, Chip, Tab, Tabs, Typography } from "@mui/material";
+import { Box, Chip, Stack, Tab, Tabs, Typography } from "@mui/material";
 import { DataGrid, GridColDef, GridRenderCellParams, GridToolbarContainer, GridToolbarExport } from "@mui/x-data-grid";
 import { useMemo, useState } from "react";
 import dayjs from "dayjs";
@@ -14,6 +14,7 @@ export type CardRow = {
   id: string;
   last4: string;
   name: string;
+  amount: number | "unlim" | null;
   source: string;
   status: Status;
   firedAtIso: string | null;
@@ -40,6 +41,7 @@ type FiredSubTab = "all" | "success" | "failed" | "cascade";
 export default function CardsTable({ rows, counts }: { rows: CardRow[]; counts: CardCounts }) {
   const [tab, setTab] = useState<TopTab>("pool");
   const [firedSub, setFiredSub] = useState<FiredSubTab>("success");
+  const [amountFilter, setAmountFilter] = useState<string | null>(null);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
@@ -54,11 +56,29 @@ export default function CardsTable({ rows, counts }: { rows: CardRow[]; counts: 
     return fired;
   }, [rows, tab, firedSub]);
 
+  // Amount "groups" — a free stand-in for the Pro grid's row grouping. Chips
+  // count cards per topup amount in the current tab and filter the grid.
+  const amountGroups = useMemo(() => {
+    const m = new Map<string, { label: string; count: number; order: number }>();
+    for (const r of filtered) {
+      const key = amountKey(r.amount);
+      const g = m.get(key);
+      if (g) g.count++;
+      else m.set(key, { label: amountLabel(r.amount), count: 1, order: amountSortValue(r.amount) });
+    }
+    return [...m.entries()].map(([key, v]) => ({ key, ...v })).sort((a, b) => a.order - b.order);
+  }, [filtered]);
+
+  const displayed = useMemo(
+    () => (amountFilter ? filtered.filter(r => amountKey(r.amount) === amountFilter) : filtered),
+    [filtered, amountFilter],
+  );
+
   return (
     <>
       <Tabs
         value={tab}
-        onChange={(_, v) => setTab(v as TopTab)}
+        onChange={(_, v) => { setTab(v as TopTab); setAmountFilter(null); }}
         sx={{ borderBottom: 1, borderColor: "divider", mb: tab === "fired" ? 0 : 2 }}
       >
         <Tab value="pool" label={`Pool (${counts.pool.toLocaleString()})`} />
@@ -85,8 +105,30 @@ export default function CardsTable({ rows, counts }: { rows: CardRow[]; counts: 
         </Tabs>
       )}
 
+      {amountGroups.length > 1 && (
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
+          <Chip
+            label={`All (${filtered.length.toLocaleString()})`}
+            size="small"
+            variant={amountFilter === null ? "filled" : "outlined"}
+            color={amountFilter === null ? "primary" : "default"}
+            onClick={() => setAmountFilter(null)}
+          />
+          {amountGroups.map(g => (
+            <Chip
+              key={g.key}
+              label={`${g.label} (${g.count.toLocaleString()})`}
+              size="small"
+              variant={amountFilter === g.key ? "filled" : "outlined"}
+              color={amountFilter === g.key ? "primary" : "default"}
+              onClick={() => setAmountFilter(amountFilter === g.key ? null : g.key)}
+            />
+          ))}
+        </Stack>
+      )}
+
       <DataGrid
-        rows={filtered}
+        rows={displayed}
         columns={columns}
         initialState={{ pagination: { paginationModel: { pageSize: 25 } } }}
         pageSizeOptions={[25, 50, 100]}
@@ -122,6 +164,16 @@ const columns: GridColDef[] = [
     minWidth: 160,
   },
   {
+    field: "amount",
+    headerName: "Amount",
+    width: 120,
+    valueGetter: (_v, row: CardRow) => amountLabel(row.amount),
+    sortComparator: (_v1, _v2, p1, p2) =>
+      amountSortValue((p1.api.getRow(p1.id) as CardRow).amount) -
+      amountSortValue((p2.api.getRow(p2.id) as CardRow).amount),
+    renderCell: (p: GridRenderCellParams<CardRow>) => <AmountCell amount={p.row.amount} />,
+  },
+  {
     field: "source",
     headerName: "Source",
     flex: 1,
@@ -153,6 +205,28 @@ const columns: GridColDef[] = [
     renderCell: (p: GridRenderCellParams<CardRow>) => <VerdictChip row={p.row} />,
   },
 ];
+
+function amountKey(a: CardRow["amount"]): string {
+  if (a === null) return "none";
+  if (a === "unlim") return "unlim";
+  return a.toFixed(2);
+}
+function amountLabel(a: CardRow["amount"]): string {
+  if (a === null) return "—";
+  if (a === "unlim") return "Unlim";
+  return `$${a.toFixed(2)}`;
+}
+/** Sort weight: real amounts ascending, then Unlim, then unknown ("—") last. */
+function amountSortValue(a: CardRow["amount"]): number {
+  if (a === null) return Number.MAX_SAFE_INTEGER;
+  if (a === "unlim") return Number.MAX_SAFE_INTEGER - 1;
+  return a;
+}
+function AmountCell({ amount }: { amount: CardRow["amount"] }) {
+  if (amount === null) return <Typography variant="body2" color="text.disabled">—</Typography>;
+  if (amount === "unlim") return <Chip label="Unlim" size="small" color="info" variant="outlined" />;
+  return <Typography variant="body2">${amount.toFixed(2)}</Typography>;
+}
 
 function StatusChip({ row }: { row: CardRow }) {
   if (row.status === "pool") return <Chip label="Pool" size="small" />;

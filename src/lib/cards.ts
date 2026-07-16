@@ -1,5 +1,6 @@
 import { db } from "./db";
 import type { Prisma } from "@prisma/client";
+import type { CardAmount } from "./csv";
 
 /** Pool = cards with NO schedule rows at all. Once a card has been scheduled
  *  anywhere, ever — it's used. Single-use semantic. */
@@ -30,6 +31,7 @@ export type CardFields = {
   name: string;
   expMonth: string;
   expYear: string;
+  amount: CardAmount;
   sourceFile: string;
   createdAt: string;
   billing: { street: string; city: string; state: string; zipCode: string };
@@ -44,6 +46,7 @@ export function flattenCardData(cardDataJson: string): CardFields {
     name: `${data.cardholder?.first_name ?? ""} ${data.cardholder?.last_name ?? ""}`.trim(),
     expMonth: String(data.card?.exp_month ?? ""),
     expYear: String(data.card?.exp_year ?? ""),
+    amount: (data.amount ?? null) as CardAmount,
     sourceFile: String(data.source_file ?? ""),
     createdAt: String(data.created_at ?? ""),
     billing: {

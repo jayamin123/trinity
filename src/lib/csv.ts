@@ -81,6 +81,21 @@ function isExpired(month: string, year: string): boolean {
   return y < now.getUTCFullYear() || (y === now.getUTCFullYear() && m < now.getUTCMonth() + 1);
 }
 
+/** A card's topup balance: a dollar amount, "unlim" for cards that draw on a
+ *  shared main account (e.g. Slash), or null when the upload didn't say. */
+export type CardAmount = number | "unlim" | null;
+
+/** Normalise a raw amount cell/field into a CardAmount. Blank/garbage → null so
+ *  existing uploads (which have no amount column) are unaffected. */
+function normalizeAmount(raw: string): CardAmount {
+  const v = raw.trim();
+  if (!v) return null;
+  if (/^unlim/i.test(v) || /^unlimited$/i.test(v) || v === "∞") return "unlim";
+  const n = parseFloat(v.replace(/[$,]/g, ""));
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n * 100) / 100;
+}
+
 /** Already-extracted, trimmed card fields — the shared shape both the CSV and
  *  JSON ingest paths normalise into before building the stored row. */
 type CardFields = {
@@ -88,6 +103,7 @@ type CardFields = {
   firstName: string; lastName: string;
   address: string; city: string; state: string; zipCode: string;
   phone: string; email: string; ipAddress: string;
+  amount: CardAmount;
 };
 
 /** Build the stored `cards` row (identity key + encrypted card_data blob) from
@@ -109,6 +125,7 @@ function assembleCard(f: CardFields, sourceFile: string): ParsedCard {
     },
     billing_address: { street: f.address, city: f.city, state: f.state, zip_code: f.zipCode },
     contact: { phone: f.phone, email: f.email, ip_address: f.ipAddress },
+    amount: f.amount,
     source_file: sourceFile,
     created_at: nowBkk().toISOString(),
   };
@@ -171,6 +188,8 @@ export function parseCardsCsv(text: string, sourceFile: string): ParseResult {
       phone: pick(row, "Phone Number", "PhoneNum", "Phone"),
       email: pick(row, "Email Address", "EmailAdr", "Email"),
       ipAddress: pick(row, "IP Address", "IPAdr", "IP"),
+      // NOT aliased to "Amount" — that's the CC charge column (always 0).
+      amount: normalizeAmount(pick(row, "Topup Amount", "Topup", "Card Amount", "Balance")),
     }, sourceFile));
   });
 
@@ -199,6 +218,7 @@ export type JsonCardInput = {
   phone?: string; phoneNumber?: string; phone_number?: string;
   email?: string; emailAddress?: string; email_address?: string;
   ipAddress?: string; ip?: string; ip_address?: string;
+  amount?: string | number; topup?: string | number; balance?: string | number;
 };
 
 /** Coerce any JSON scalar to a trimmed string ("" for null/undefined). */
@@ -264,6 +284,7 @@ export function parseCardsJson(rows: unknown[], sourceFile: string): ParseResult
       phone: asStr(r.phone ?? r.phoneNumber ?? r.phone_number),
       email: asStr(r.email ?? r.emailAddress ?? r.email_address),
       ipAddress: asStr(r.ipAddress ?? r.ip ?? r.ip_address),
+      amount: normalizeAmount(asStr(r.amount ?? r.topup ?? r.balance)),
     }, sourceFile));
   });
 

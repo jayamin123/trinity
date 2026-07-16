@@ -11,8 +11,9 @@ import SellIcon from "@mui/icons-material/Sell";
 import BusinessIcon from "@mui/icons-material/Business";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import BarChartIcon from "@mui/icons-material/BarChart";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import { useMemo, useState } from "react";
-import { previewAddSchedule, addCardsToFlow } from "./actions";
+import { previewAddSchedule, addCardsToFlow, refreshFlowProducts } from "./actions";
 import { InfoBar, SectionCard } from "@/components/modal-shared";
 
 type Product = { id: string; name: string; price: number };
@@ -33,6 +34,10 @@ export default function AddCardsDialog({
   campaignName: string;
 }) {
   const [open, setOpen] = useState(false);
+  // Seeded from the server prop, but kept in state so the "Refresh from CC"
+  // button can update the picker live without reloading the page.
+  const [products, setProducts] = useState<Product[]>(availableProducts);
+  const [refreshing, setRefreshing] = useState(false);
   const [picks, setPicks] = useState<Record<string, { count: number; price: number }>>({});
   const [startDate, setStartDate] = useState(defaultStart);
   const [endDate, setEndDate] = useState(defaultEnd);
@@ -44,12 +49,31 @@ export default function AddCardsDialog({
   function reset() {
     const initial: typeof picks = {};
     for (const p of availableProducts) initial[p.id] = { count: 0, price: p.price };
+    setProducts(availableProducts);
     setPicks(initial);
     setStartDate(defaultStart);
     setEndDate(defaultEnd);
     setPreview(null);
     setError(null);
     setSubmitting(false);
+  }
+
+  async function handleRefresh() {
+    setError(null);
+    setRefreshing(true);
+    try {
+      const fresh = await refreshFlowProducts(flowId);
+      setProducts(fresh);
+      // Keep whatever counts the user has typed; pick up the new catalog prices.
+      setPicks(prev => {
+        const next: typeof prev = {};
+        for (const p of fresh) next[p.id] = { count: prev[p.id]?.count ?? 0, price: p.price };
+        return next;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Refresh failed");
+    }
+    setRefreshing(false);
   }
   function setCount(id: string, count: number) {
     setPicks(prev => ({ ...prev, [id]: { count: Math.max(0, count | 0), price: prev[id]?.price ?? 0 } }));
@@ -91,7 +115,7 @@ export default function AddCardsDialog({
       setError(`Schedule sums to ${previewSum} but mix sums to ${totalCards}`);
       return;
     }
-    const productMix = availableProducts
+    const productMix = products
       .filter(p => (picks[p.id]?.count ?? 0) > 0)
       .map(p => ({
         product_id: p.id, product_name: p.name,
@@ -155,7 +179,21 @@ export default function AddCardsDialog({
               },
             ]} />
 
-            <SectionCard title="Pick products" icon={<SellIcon />}>
+            <SectionCard
+              title="Pick products"
+              icon={<SellIcon />}
+              action={
+                <Button
+                  onClick={handleRefresh}
+                  variant="outlined"
+                  size="small"
+                  startIcon={<RefreshIcon />}
+                  disabled={refreshing || submitting}
+                >
+                  {refreshing ? "Refreshing…" : "Refresh from CC"}
+                </Button>
+              }
+            >
               <Table size="small">
                 <TableHead>
                   <TableRow>
@@ -165,7 +203,7 @@ export default function AddCardsDialog({
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {availableProducts.map(p => (
+                  {products.map(p => (
                     <TableRow key={p.id}>
                       <TableCell>{p.name} <span style={{ color: "#888" }}>#{p.id}</span></TableCell>
                       <TableCell align="right">

@@ -462,6 +462,49 @@ export async function deleteProductFromFlow(flowId: string, productId: string) {
   revalidatePath(`/flows/${flowId}`);
 }
 
+/** Re-pull the CC campaign and sync product name + price onto the flow's stored
+ *  cc_products — for when the campaign is edited in CheckoutChamp (e.g. a price
+ *  change) after the flow was built. Matches by product id: updates existing
+ *  entries in place (count untouched) and appends products newly added to the
+ *  campaign with count 0. Products no longer on the campaign are LEFT ALONE —
+ *  they may still be referenced by schedules; removal stays the guarded manual
+ *  action (deleteProductFromFlow). Returns the fresh list so an open dialog can
+ *  reflect it without a reload. */
+export async function refreshFlowProducts(flowId: string): Promise<CCProduct[]> {
+  const flow = await db.flow.findUnique({
+    where: { id: flowId },
+    include: { account: true },
+  });
+  if (!flow) throw new Error("Flow not found");
+
+  const settings = parseFlowSettings(flow.flowSettings);
+  const catalog = await listCCProducts(
+    {
+      apiUrl: flow.account.apiUrl,
+      loginId: flow.account.loginIdEncrypted,
+      password: flow.account.passwordEncrypted,
+    },
+    settings.cc_campaign.id,
+  );
+
+  for (const fresh of catalog) {
+    const existing = settings.cc_products.find(p => p.id === fresh.id);
+    if (existing) {
+      existing.name = fresh.name;
+      existing.price = fresh.price;
+    } else {
+      settings.cc_products.push({ id: fresh.id, name: fresh.name, price: fresh.price, count: 0 });
+    }
+  }
+
+  await db.flow.update({
+    where: { id: flowId },
+    data: { flowSettings: JSON.stringify(settings) },
+  });
+  revalidatePath(`/flows/${flowId}`);
+  return settings.cc_products;
+}
+
 /** Retry a failed fire by rescheduling it. Refuses unless the schedule is
  *  `status='fired'` AND `success=false`. Resets it to `pending`, sets a new
  *  `scheduledFor`, clears `firedAt` / `orderId` / `success`, but PRESERVES

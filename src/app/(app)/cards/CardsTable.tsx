@@ -1,5 +1,5 @@
 "use client";
-import { Box, Chip, Stack, Tab, Tabs, Typography } from "@mui/material";
+import { Box, Chip, MenuItem, Stack, Tab, Tabs, TextField, Typography } from "@mui/material";
 import { DataGrid, GridColDef, GridRenderCellParams, GridToolbarContainer, GridToolbarExport } from "@mui/x-data-grid";
 import { useMemo, useState } from "react";
 import dayjs from "dayjs";
@@ -34,105 +34,113 @@ export type CardCounts = {
   pool: number;
   pending: number;
   fired: number;
-  unlim: number;
   success: number;
   failed: number;
   cascade: number;
 };
 
-type TopTab = "all" | "pool" | "pending" | "fired" | "unlim";
-type FiredSubTab = "all" | "success" | "failed" | "cascade";
+type TopTab = "all" | "pool" | "pending" | "fired";
+type BalanceFilter = "all" | "unlim" | "numbered";
+type VerdictFilter = "all" | "success" | "failed" | "cascade";
 
 export default function CardsTable({ rows, counts }: { rows: CardRow[]; counts: CardCounts }) {
   const [tab, setTab] = useState<TopTab>("pool");
-  const [firedSub, setFiredSub] = useState<FiredSubTab>("success");
-  const [amountFilter, setAmountFilter] = useState<string | null>(null);
+  const [balanceFilter, setBalanceFilter] = useState<BalanceFilter>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("");
+  const [flowFilter, setFlowFilter] = useState<string>("");
+  const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>("all");
   const [openCardId, setOpenCardId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    if (tab === "all") return rows;
-    if (tab === "unlim") return rows.filter(r => r.amount === "unlim");
-    if (tab === "pool") return rows.filter(r => r.status === "pool");
-    if (tab === "pending") return rows.filter(r => r.status === "pending");
-    // fired
-    const fired = rows.filter(r => r.status === "fired");
-    if (firedSub === "success") return fired.filter(r => r.ccVerdict === "success");
-    if (firedSub === "failed") return fired.filter(r => r.ccVerdict === "failed");
-    if (firedSub === "cascade") return fired.filter(r => r.ccVerdict === "cascade");
-    return fired;
-  }, [rows, tab, firedSub]);
+  // Switching status tabs clears the dropdown filters (each tab starts fresh).
+  function changeTab(next: TopTab) {
+    setTab(next);
+    setBalanceFilter("all");
+    setSourceFilter("");
+    setFlowFilter("");
+    setVerdictFilter("all");
+  }
 
-  // Amount "groups" — a free stand-in for the Pro grid's row grouping. Chips
-  // count cards per topup amount in the current tab and filter the grid.
-  const amountGroups = useMemo(() => {
-    const m = new Map<string, { label: string; count: number; order: number }>();
-    for (const r of filtered) {
-      const key = amountKey(r.amount);
-      const g = m.get(key);
-      if (g) g.count++;
-      else m.set(key, { label: amountLabel(r.amount), count: 1, order: amountSortValue(r.amount) });
-    }
-    return [...m.entries()].map(([key, v]) => ({ key, ...v })).sort((a, b) => a.order - b.order);
-  }, [filtered]);
-
-  const displayed = useMemo(
-    () => (amountFilter ? filtered.filter(r => amountKey(r.amount) === amountFilter) : filtered),
-    [filtered, amountFilter],
+  // Rows for the active status tab, before the dropdown filters.
+  const base = useMemo(
+    () => (tab === "all" ? rows : rows.filter(r => r.status === tab)),
+    [rows, tab],
   );
+
+  // Dropdown option lists, derived from the current tab's rows.
+  const sourceOptions = useMemo(
+    () => [...new Set(base.map(r => r.source).filter(Boolean))].sort(),
+    [base],
+  );
+  const flowOptions = useMemo(
+    () => [...new Set(base.map(r => r.flowName).filter((f): f is string => !!f))].sort(),
+    [base],
+  );
+
+  const displayed = useMemo(() => base.filter(r => {
+    if (balanceFilter === "unlim" && r.amount !== "unlim") return false;
+    if (balanceFilter === "numbered" && typeof r.amount !== "number") return false;
+    if (sourceFilter && r.source !== sourceFilter) return false;
+    if (tab === "fired") {
+      if (flowFilter && r.flowName !== flowFilter) return false;
+      if (verdictFilter !== "all" && r.ccVerdict !== verdictFilter) return false;
+    }
+    return true;
+  }), [base, balanceFilter, sourceFilter, flowFilter, verdictFilter, tab]);
 
   return (
     <>
       <Tabs
         value={tab}
-        onChange={(_, v) => { setTab(v as TopTab); setAmountFilter(null); }}
-        sx={{ borderBottom: 1, borderColor: "divider", mb: tab === "fired" ? 0 : 2 }}
+        onChange={(_, v) => changeTab(v as TopTab)}
+        sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}
       >
         <Tab value="pool" label={`Pool (${counts.pool.toLocaleString()})`} />
         <Tab value="pending" label={`Pending (${counts.pending.toLocaleString()})`} />
         <Tab value="fired" label={`Fired (${counts.fired.toLocaleString()})`} />
-        <Tab value="unlim" label={`Unlimited (${counts.unlim.toLocaleString()})`} />
         <Tab value="all" label={`All (${counts.all.toLocaleString()})`} sx={{ ml: "auto" }} />
       </Tabs>
-      {tab === "fired" && (
-        <Tabs
-          value={firedSub}
-          onChange={(_, v) => setFiredSub(v as FiredSubTab)}
-          textColor="secondary"
-          indicatorColor="secondary"
-          sx={{
-            borderBottom: 1, borderColor: "divider", mb: 2,
-            minHeight: 38,
-            "& .MuiTab-root": { minHeight: 38, fontSize: "0.8rem", textTransform: "none" },
-          }}
-        >
-          <Tab value="success" label={`Success (${counts.success.toLocaleString()})`} />
-          <Tab value="failed" label={`Failed (${counts.failed.toLocaleString()})`} />
-          <Tab value="cascade" label={`Cascade (${counts.cascade.toLocaleString()})`} />
-          <Tab value="all" label={`All fired (${counts.fired.toLocaleString()})`} sx={{ ml: "auto" }} />
-        </Tabs>
-      )}
 
-      {amountGroups.length > 1 && (
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
-          <Chip
-            label={`All (${filtered.length.toLocaleString()})`}
-            size="small"
-            variant={amountFilter === null ? "filled" : "outlined"}
-            color={amountFilter === null ? "primary" : "default"}
-            onClick={() => setAmountFilter(null)}
-          />
-          {amountGroups.map(g => (
-            <Chip
-              key={g.key}
-              label={`${g.label} (${g.count.toLocaleString()})`}
-              size="small"
-              variant={amountFilter === g.key ? "filled" : "outlined"}
-              color={amountFilter === g.key ? "primary" : "default"}
-              onClick={() => setAmountFilter(amountFilter === g.key ? null : g.key)}
-            />
-          ))}
-        </Stack>
-      )}
+      <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+        <TextField
+          select size="small" label="Balance" value={balanceFilter}
+          onChange={e => setBalanceFilter(e.target.value as BalanceFilter)}
+          sx={{ minWidth: 150 }}
+        >
+          <MenuItem value="all">All</MenuItem>
+          <MenuItem value="unlim">Unlimited</MenuItem>
+          <MenuItem value="numbered">Has a balance</MenuItem>
+        </TextField>
+        <TextField
+          select size="small" label="Source" value={sourceFilter}
+          onChange={e => setSourceFilter(e.target.value)}
+          sx={{ minWidth: 220, maxWidth: 340 }}
+        >
+          <MenuItem value="">All sources</MenuItem>
+          {sourceOptions.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+        </TextField>
+        {tab === "fired" && (
+          <>
+            <TextField
+              select size="small" label="Flow" value={flowFilter}
+              onChange={e => setFlowFilter(e.target.value)}
+              sx={{ minWidth: 180 }}
+            >
+              <MenuItem value="">All flows</MenuItem>
+              {flowOptions.map(f => <MenuItem key={f} value={f}>{f}</MenuItem>)}
+            </TextField>
+            <TextField
+              select size="small" label="CC verdict" value={verdictFilter}
+              onChange={e => setVerdictFilter(e.target.value as VerdictFilter)}
+              sx={{ minWidth: 150 }}
+            >
+              <MenuItem value="all">All</MenuItem>
+              <MenuItem value="success">Success</MenuItem>
+              <MenuItem value="failed">Failed</MenuItem>
+              <MenuItem value="cascade">Cascade</MenuItem>
+            </TextField>
+          </>
+        )}
+      </Stack>
 
       <DataGrid
         rows={displayed}
@@ -213,11 +221,6 @@ const columns: GridColDef[] = [
   },
 ];
 
-function amountKey(a: CardRow["amount"]): string {
-  if (a === null) return "none";
-  if (a === "unlim") return "unlim";
-  return a.toFixed(2);
-}
 function amountLabel(a: CardRow["amount"]): string {
   if (a === null) return "—";
   if (a === "unlim") return "Unlim";

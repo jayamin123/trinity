@@ -26,9 +26,13 @@ type PreviewDay = { date: string; count: number };
 const today = dayjs.utc(nowBkk()).format("YYYY-MM-DD");
 const inSevenDays = dayjs.utc(nowBkk()).add(7, "day").format("YYYY-MM-DD");
 
-export default function NewFlowForm({ sources, poolCount }: { sources: FlowSource[]; poolCount: number }) {
+export default function NewFlowForm({ sources, topupPoolCount, unlimCount }: { sources: FlowSource[]; topupPoolCount: number; unlimCount: number }) {
   const [name, setName] = useState("");
+  const [cardSource, setCardSource] = useState<"topup" | "unlim">("topup");
   const [sourceFlowId, setSourceFlowId] = useState("");
+
+  // Cards available for the selected source drive the caps and validation.
+  const activeCount = cardSource === "unlim" ? unlimCount : topupPoolCount;
 
   // CC option lists, fetched live from CheckoutChamp.
   const [gateways, setGateways] = useState<Opt[]>([]);
@@ -141,7 +145,7 @@ export default function NewFlowForm({ sources, poolCount }: { sources: FlowSourc
   async function rollPreview() {
     setError(null);
     if (totalCards <= 0) { setError("Pick at least one card"); return; }
-    if (totalCards > poolCount) { setError(`Only ${poolCount} cards in the pool`); return; }
+    if (totalCards > activeCount) { setError(`Only ${activeCount} ${cardSource === "unlim" ? "unlimited" : "pool"} cards available`); return; }
     setPreviewLoading(true);
     try {
       const result = await previewSchedule(totalCards, startDate, endDate);
@@ -185,6 +189,7 @@ export default function NewFlowForm({ sources, poolCount }: { sources: FlowSourc
         name: name.trim() || `Flow ${dayjs.utc(nowBkk()).format("MMM D")}`,
         ccGateway: gateway,
         ccCampaign: campaign,
+        cardSource,
         productMix,
         perDay: preview,
       });
@@ -205,6 +210,18 @@ export default function NewFlowForm({ sources, poolCount }: { sources: FlowSourc
         {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
 
         <TextField label="Flow name" value={name} onChange={e => setName(e.target.value)} fullWidth autoFocus placeholder="e.g. Apollo June rotation" />
+
+        <TextField
+          select label="Card source" value={cardSource}
+          onChange={e => setCardSource(e.target.value as "topup" | "unlim")}
+          fullWidth
+          helperText={cardSource === "unlim"
+            ? `Unlimited roster — ${unlimCount.toLocaleString()} available, reusable across campaigns (once per campaign)`
+            : `Single-use topup pool — ${topupPoolCount.toLocaleString()} available`}
+        >
+          <MenuItem value="topup">Topup pool (single-use)</MenuItem>
+          <MenuItem value="unlim">Unlimited roster (reusable)</MenuItem>
+        </TextField>
 
         {sources.length > 0 && (
           <TextField
@@ -285,7 +302,7 @@ export default function NewFlowForm({ sources, poolCount }: { sources: FlowSourc
                           type="number" size="small"
                           value={picks[p.id]?.count ?? 0}
                           onChange={e => setCount(p.id, Number(e.target.value) || 0)}
-                          inputProps={{ min: 0, max: poolCount, style: { textAlign: "right" } }}
+                          inputProps={{ min: 0, max: activeCount, style: { textAlign: "right" } }}
                           sx={{ width: 80 }}
                         />
                       </TableCell>
@@ -300,7 +317,7 @@ export default function NewFlowForm({ sources, poolCount }: { sources: FlowSourc
               </Table>
             )}
             <Typography variant="caption" color="text.secondary">
-              {poolCount.toLocaleString()} cards available in pool.
+              {activeCount.toLocaleString()} {cardSource === "unlim" ? "unlimited cards available (reusable)" : "cards available in pool"}.
             </Typography>
           </Box>
         )}

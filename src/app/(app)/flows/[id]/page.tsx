@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { Box, Typography, Chip, Stack, Button } from "@mui/material";
 import { db } from "@/lib/db";
-import { parseFlowSettings, getFlowDayRollup } from "@/lib/flows";
-import { countCardsInPool } from "@/lib/cards";
+import { parseFlowSettings, getFlowDayRollup, flowCardSource } from "@/lib/flows";
+import { countTopupPool, countUnlimAvailable } from "@/lib/cards";
 import { formatBkk, nowBkk } from "@/lib/bkk";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -48,7 +48,7 @@ export default async function FlowDetailPage({
           include: { card: { select: { panLast4: true, cardData: true } } },
         })
       : Promise.resolve([]),
-    countCardsInPool(),
+    flowCardSource(settings) === "unlim" ? countUnlimAvailable(id) : countTopupPool(),
     db.schedule.findFirst({
       where: { flowId: id },
       orderBy: { scheduledFor: "desc" },

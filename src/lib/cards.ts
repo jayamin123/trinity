@@ -25,6 +25,72 @@ export async function pullCardsFromPool(limit: number) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Source-aware pulls. A flow draws from one population (never mixed):
+//   topup → the single-use pool, EXCLUDING unlimited cards (FIFO).
+//   unlim → the reusable roster: unlimited cards not already in THIS flow.
+// Both return `{ id }[]` — callers only need the id. Raw SQL because the
+// amount lives inside the card_data JSON blob (no dedicated column).
+// ---------------------------------------------------------------------------
+
+/** Single-use pool, topup cards only (unlimited cards are reserved for the
+ *  roster and never consumed here). Oldest first. */
+export async function pullTopupFromPool(limit: number): Promise<{ id: string }[]> {
+  return db.$queryRawUnsafe<{ id: string }[]>(
+    `SELECT c.id FROM cards c
+     WHERE NOT EXISTS (SELECT 1 FROM schedules s WHERE s.card_id = c.id)
+       AND COALESCE(json_extract(c.card_data,'$.amount'),'') != 'unlim'
+     ORDER BY c.created_at ASC LIMIT ?`,
+    limit,
+  );
+}
+
+/** Unlimited roster available to a flow: unlim cards with no schedule in that
+ *  flow (reusable across flows, once per flow). Omit flowId for a brand-new
+ *  flow (nothing is in it yet). Oldest first. */
+export async function pullUnlimForFlow(limit: number, flowId?: string): Promise<{ id: string }[]> {
+  if (flowId) {
+    return db.$queryRawUnsafe<{ id: string }[]>(
+      `SELECT c.id FROM cards c
+       WHERE json_extract(c.card_data,'$.amount') = 'unlim'
+         AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.card_id = c.id AND s.flow_id = ?)
+       ORDER BY c.created_at ASC LIMIT ?`,
+      flowId, limit,
+    );
+  }
+  return db.$queryRawUnsafe<{ id: string }[]>(
+    `SELECT c.id FROM cards c
+     WHERE json_extract(c.card_data,'$.amount') = 'unlim'
+     ORDER BY c.created_at ASC LIMIT ?`,
+    limit,
+  );
+}
+
+/** Count of topup cards available in the single-use pool. */
+export async function countTopupPool(): Promise<number> {
+  const r = await db.$queryRawUnsafe<{ n: number }[]>(
+    `SELECT COUNT(*) AS n FROM cards c
+     WHERE NOT EXISTS (SELECT 1 FROM schedules s WHERE s.card_id = c.id)
+       AND COALESCE(json_extract(c.card_data,'$.amount'),'') != 'unlim'`,
+  );
+  return Number(r[0]?.n ?? 0);
+}
+
+/** Count of unlimited roster cards available (to a flow, if given). */
+export async function countUnlimAvailable(flowId?: string): Promise<number> {
+  const r = flowId
+    ? await db.$queryRawUnsafe<{ n: number }[]>(
+        `SELECT COUNT(*) AS n FROM cards c
+         WHERE json_extract(c.card_data,'$.amount') = 'unlim'
+           AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.card_id = c.id AND s.flow_id = ?)`,
+        flowId,
+      )
+    : await db.$queryRawUnsafe<{ n: number }[]>(
+        `SELECT COUNT(*) AS n FROM cards c WHERE json_extract(c.card_data,'$.amount') = 'unlim'`,
+      );
+  return Number(r[0]?.n ?? 0);
+}
+
 /** Human-facing fields flattened out of a card's `card_data` JSON blob.
  *  Excludes PAN/CVV — those stay encrypted and are revealed separately. */
 export type CardFields = {

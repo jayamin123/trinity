@@ -39,6 +39,7 @@ export default async function CardsPage({
     const data = JSON.parse(c.cardData);
     const name = `${data.cardholder?.first_name ?? ""} ${data.cardholder?.last_name ?? ""}`.trim() || "—";
     const sourceFile = data.source_file ?? "";
+    const amount = (data.amount ?? null) as CardRow["amount"];
 
     const schedules = schedulesByCard.get(c.id) ?? [];
 
@@ -95,6 +96,7 @@ export default async function CardsPage({
       id: c.id,
       last4: c.panLast4,
       name,
+      amount,
       source: sourceFile,
       status,
       firedAtIso,
@@ -138,7 +140,7 @@ export default async function CardsPage({
                 Optional
               </Typography>
               <Typography variant="caption" sx={{ display: "block" }}>
-                First Name, Last Name, Address, City, State, Zip Code, Phone Number, Email Address, IP Address
+                First Name, Last Name, Address, City, State, Zip Code, Phone Number, Email Address, IP Address, Topup Amount
               </Typography>
               <Typography variant="caption" sx={{ display: "block", mt: 1, fontStyle: "italic" }}>
                 Re-uploading the same card (same name + last 4 + expiry) merges onto the existing identity row.

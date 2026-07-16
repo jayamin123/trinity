@@ -188,8 +188,8 @@ export function parseCardsCsv(text: string, sourceFile: string): ParseResult {
       phone: pick(row, "Phone Number", "PhoneNum", "Phone"),
       email: pick(row, "Email Address", "EmailAdr", "Email"),
       ipAddress: pick(row, "IP Address", "IPAdr", "IP"),
-      // NOT aliased to "Amount" — that's the CC charge column (always 0).
-      amount: normalizeAmount(pick(row, "Topup Amount", "Topup", "Card Amount", "Balance")),
+      // The Amount column IS the card's balance: a dollar number, or "UNLIM".
+      amount: normalizeAmount(pick(row, "Amount", "Topup Amount", "Card Amount", "Balance")),
     }, sourceFile));
   });
 

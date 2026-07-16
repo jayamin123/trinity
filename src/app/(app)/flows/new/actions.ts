@@ -1,9 +1,9 @@
 "use server";
 import { db } from "@/lib/db";
-import { pullTopupFromPool, pullUnlimForFlow } from "@/lib/cards";
+import { pullAvailableForFlow } from "@/lib/cards";
 import { randomDailyCounts, stratifiedTimesForDay } from "@/lib/schedule";
 import { nowBkk } from "@/lib/bkk";
-import { type FirePlan, type FlowSettings, type CardSource } from "@/lib/flows";
+import { type FirePlan, type FlowSettings } from "@/lib/flows";
 import { listGateways as ccListGateways, listCampaigns as ccListCampaigns, listProducts as ccListProducts } from "@/lib/checkoutchamp";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -41,8 +41,6 @@ export type CreateFlowInput = {
   name: string;
   ccGateway: { id: string; name: string };
   ccCampaign: { id: string; name: string };
-  /** Which card population to draw from — topup pool or unlimited roster. */
-  cardSource: CardSource;
   /** Per-product mix the user picked. Sum of counts = total cards. */
   productMix: ProductPick[];
   /** Per-day card counts (after randomized distribution). Length = days in window. */
@@ -75,14 +73,10 @@ export async function createFlow(input: CreateFlowInput) {
     throw new Error(`Per-day schedule sums to ${perDaySum} but product mix sums to ${totalCards}`);
   }
 
-  // Pull cards from the chosen population. Unlim: brand-new flow, so no flowId
-  // filter needed (nothing is in it yet).
-  const cards = input.cardSource === "unlim"
-    ? await pullUnlimForFlow(totalCards)
-    : await pullTopupFromPool(totalCards);
+  // Pull cards that still have balance. Brand-new flow, so no flowId filter.
+  const cards = await pullAvailableForFlow(totalCards);
   if (cards.length < totalCards) {
-    const kind = input.cardSource === "unlim" ? "unlimited" : "pool";
-    throw new Error(`Only ${cards.length} ${kind} cards available — need ${totalCards}`);
+    throw new Error(`Only ${cards.length} cards available (with balance) — need ${totalCards}`);
   }
 
   // Build a per-card fire_plan list shuffled across products so the
@@ -113,7 +107,6 @@ export async function createFlow(input: CreateFlowInput) {
     lifecycle: { status: "active", paused_at: null, last_charged_at: null },
     cc_gateway: input.ccGateway,
     cc_campaign: input.ccCampaign,
-    card_source: input.cardSource,
     cc_products: input.productMix.map(p => ({
       id: p.product_id,
       name: p.product_name,

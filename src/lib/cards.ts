@@ -26,68 +26,45 @@ export async function pullCardsFromPool(limit: number) {
 }
 
 // ---------------------------------------------------------------------------
-// Source-aware pulls. A flow draws from one population (never mixed):
-//   topup → the single-use pool, EXCLUDING unlimited cards (FIFO).
-//   unlim → the reusable roster: unlimited cards not already in THIS flow.
-// Both return `{ id }[]` — callers only need the id. Raw SQL because the
-// amount lives inside the card_data JSON blob (no dedicated column).
+// Balance-based availability (see lib/balance.ts for the model). A card is
+// available to a flow when ANY of:
+//   - unlimited AND not already scheduled in THIS flow (once per campaign), OR
+//   - untagged  AND holding no live charge (single-use), OR
+//   - numbered  AND remaining balance (start − live charge prices) > 0.
+// "Live" = pending / processing / fired-succeeded (a failed fire frees its
+// reservation). Raw SQL because amount lives inside the card_data JSON blob.
+// The single `?` inside the HAVING is the flowId — pass "" for a brand-new flow.
 // ---------------------------------------------------------------------------
+const LIVE_CHARGE = `(s.status IN ('pending','processing') OR (s.status = 'fired' AND s.success = 1))`;
+const AVAILABLE_HAVING = `
+  HAVING
+    ( json_extract(c.card_data,'$.amount') = 'unlim'
+      AND SUM(CASE WHEN s.flow_id = ? THEN 1 ELSE 0 END) = 0 )
+    OR
+    ( json_extract(c.card_data,'$.amount') IS NULL
+      AND COALESCE(SUM(CASE WHEN ${LIVE_CHARGE} THEN 1 ELSE 0 END), 0) = 0 )
+    OR
+    ( typeof(json_extract(c.card_data,'$.amount')) IN ('integer','real')
+      AND CAST(json_extract(c.card_data,'$.amount') AS REAL)
+          - COALESCE(SUM(CASE WHEN ${LIVE_CHARGE} THEN CAST(json_extract(s.fire_plan,'$.price') AS REAL) ELSE 0 END), 0)
+          > 0 )`;
+const AVAILABLE_SELECT = `SELECT c.id FROM cards c LEFT JOIN schedules s ON s.card_id = c.id GROUP BY c.id ${AVAILABLE_HAVING}`;
 
-/** Single-use pool, topup cards only (unlimited cards are reserved for the
- *  roster and never consumed here). Oldest first. */
-export async function pullTopupFromPool(limit: number): Promise<{ id: string }[]> {
+/** Cards that still have balance for a flow, oldest first. Pass the flow's id so
+ *  an unlimited card already in that flow is excluded; omit ("") for createFlow. */
+export async function pullAvailableForFlow(limit: number, flowId: string = ""): Promise<{ id: string }[]> {
   return db.$queryRawUnsafe<{ id: string }[]>(
-    `SELECT c.id FROM cards c
-     WHERE NOT EXISTS (SELECT 1 FROM schedules s WHERE s.card_id = c.id)
-       AND COALESCE(json_extract(c.card_data,'$.amount'),'') != 'unlim'
-     ORDER BY c.created_at ASC LIMIT ?`,
-    limit,
+    `${AVAILABLE_SELECT} ORDER BY c.created_at ASC LIMIT ?`,
+    flowId, limit,
   );
 }
 
-/** Unlimited roster available to a flow: unlim cards with no schedule in that
- *  flow (reusable across flows, once per flow). Omit flowId for a brand-new
- *  flow (nothing is in it yet). Oldest first. */
-export async function pullUnlimForFlow(limit: number, flowId?: string): Promise<{ id: string }[]> {
-  if (flowId) {
-    return db.$queryRawUnsafe<{ id: string }[]>(
-      `SELECT c.id FROM cards c
-       WHERE json_extract(c.card_data,'$.amount') = 'unlim'
-         AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.card_id = c.id AND s.flow_id = ?)
-       ORDER BY c.created_at ASC LIMIT ?`,
-      flowId, limit,
-    );
-  }
-  return db.$queryRawUnsafe<{ id: string }[]>(
-    `SELECT c.id FROM cards c
-     WHERE json_extract(c.card_data,'$.amount') = 'unlim'
-     ORDER BY c.created_at ASC LIMIT ?`,
-    limit,
-  );
-}
-
-/** Count of topup cards available in the single-use pool. */
-export async function countTopupPool(): Promise<number> {
+/** How many cards are available to a flow (same rule as pullAvailableForFlow). */
+export async function countAvailableForFlow(flowId: string = ""): Promise<number> {
   const r = await db.$queryRawUnsafe<{ n: number }[]>(
-    `SELECT COUNT(*) AS n FROM cards c
-     WHERE NOT EXISTS (SELECT 1 FROM schedules s WHERE s.card_id = c.id)
-       AND COALESCE(json_extract(c.card_data,'$.amount'),'') != 'unlim'`,
+    `SELECT COUNT(*) AS n FROM (${AVAILABLE_SELECT})`,
+    flowId,
   );
-  return Number(r[0]?.n ?? 0);
-}
-
-/** Count of unlimited roster cards available (to a flow, if given). */
-export async function countUnlimAvailable(flowId?: string): Promise<number> {
-  const r = flowId
-    ? await db.$queryRawUnsafe<{ n: number }[]>(
-        `SELECT COUNT(*) AS n FROM cards c
-         WHERE json_extract(c.card_data,'$.amount') = 'unlim'
-           AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.card_id = c.id AND s.flow_id = ?)`,
-        flowId,
-      )
-    : await db.$queryRawUnsafe<{ n: number }[]>(
-        `SELECT COUNT(*) AS n FROM cards c WHERE json_extract(c.card_data,'$.amount') = 'unlim'`,
-      );
   return Number(r[0]?.n ?? 0);
 }
 

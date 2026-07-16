@@ -5,7 +5,7 @@ import {
   type FirePlan, type CCProduct,
 } from "@/lib/flows";
 import { pullAvailableForFlow } from "@/lib/cards";
-import { randomDailyCounts, stratifiedTimesForDay } from "@/lib/schedule";
+import { stratifiedTimesForDay, distributeShaped, type DistributionShape } from "@/lib/schedule";
 import { nowBkk, calendarDateBkk } from "@/lib/bkk";
 import { listProducts as listCCProducts, listGateways, listCampaigns as listCCCampaigns } from "@/lib/checkoutchamp";
 import { revalidatePath } from "next/cache";
@@ -65,14 +65,14 @@ export async function resumeFlow(id: string) {
 // Add cards mid-flight
 // ---------------------------------------------------------------------------
 
-export async function previewAddSchedule(count: number, startDate: string, endDate: string) {
+export async function previewAddSchedule(count: number, startDate: string, endDate: string, shape: DistributionShape = "even") {
   const start = new Date(startDate + "T12:00:00Z");
   const end = new Date(endDate + "T12:00:00Z");
   const days = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
   if (days < 1) throw new Error("End date must be on or after start date");
   if (days > 366) throw new Error("Date range is too long (max 366 days)");
   if (count <= 0) throw new Error("Add at least 1 card");
-  const counts = randomDailyCounts(count, days);
+  const counts = distributeShaped(count, days, shape);
   return counts.map((c, i) => {
     const d = new Date(start);
     d.setUTCDate(d.getUTCDate() + i);

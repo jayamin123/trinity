@@ -15,6 +15,10 @@ export type CardRow = {
   last4: string;
   name: string;
   amount: number | "unlim" | null;
+  /** Balance consumed by live charges (pending/processing/succeeded). */
+  committed: number;
+  /** committed exceeds the starting balance. */
+  overBalance: boolean;
   source: string;
   status: Status;
   firedAtIso: string | null;
@@ -168,13 +172,13 @@ const columns: GridColDef[] = [
   },
   {
     field: "amount",
-    headerName: "Initial Bal",
-    width: 120,
+    headerName: "Balance",
+    width: 170,
     valueGetter: (_v, row: CardRow) => amountLabel(row.amount),
     sortComparator: (_v1, _v2, p1, p2) =>
       amountSortValue((p1.api.getRow(p1.id) as CardRow).amount) -
       amountSortValue((p2.api.getRow(p2.id) as CardRow).amount),
-    renderCell: (p: GridRenderCellParams<CardRow>) => <AmountCell amount={p.row.amount} />,
+    renderCell: (p: GridRenderCellParams<CardRow>) => <BalanceCell row={p.row} />,
   },
   {
     field: "source",
@@ -225,10 +229,20 @@ function amountSortValue(a: CardRow["amount"]): number {
   if (a === "unlim") return Number.MAX_SAFE_INTEGER - 1;
   return a;
 }
-function AmountCell({ amount }: { amount: CardRow["amount"] }) {
-  if (amount === null) return <Typography variant="body2" color="text.disabled">—</Typography>;
+function BalanceCell({ row }: { row: CardRow }) {
+  const { amount, committed, overBalance } = row;
   if (amount === "unlim") return <Chip label="Unlim" size="small" color="info" variant="outlined" />;
-  return <Typography variant="body2">${amount.toFixed(2)}</Typography>;
+  if (amount === null) return <Typography variant="body2" color="text.disabled">—</Typography>;
+  if (overBalance) return <Chip label={`over by $${(committed - amount).toFixed(2)}`} size="small" color="error" />;
+  if (committed <= 1e-9) return <Typography variant="body2">${amount.toFixed(2)}</Typography>;
+  const remaining = amount - committed;
+  const depleted = remaining <= 1e-9;
+  return (
+    <Typography variant="body2" sx={{ color: depleted ? "text.disabled" : "inherit" }}>
+      ${remaining.toFixed(2)}
+      <Box component="span" sx={{ color: "text.disabled" }}> of ${amount.toFixed(2)}</Box>
+    </Typography>
+  );
 }
 
 function StatusChip({ row }: { row: CardRow }) {

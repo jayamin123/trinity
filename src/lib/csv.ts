@@ -81,6 +81,40 @@ function isExpired(month: string, year: string): boolean {
   return y < now.getUTCFullYear() || (y === now.getUTCFullYear() && m < now.getUTCMonth() + 1);
 }
 
+/** Already-extracted, trimmed card fields — the shared shape both the CSV and
+ *  JSON ingest paths normalise into before building the stored row. */
+type CardFields = {
+  pan: string; cvv: string; expMonth: string; expYear: string;
+  firstName: string; lastName: string;
+  address: string; city: string; state: string; zipCode: string;
+  phone: string; email: string; ipAddress: string;
+};
+
+/** Build the stored `cards` row (identity key + encrypted card_data blob) from
+ *  validated fields. Callers must have already checked required-fields / Luhn /
+ *  in-batch duplicates — this only assembles and encrypts. Keeping this in one
+ *  place is what guarantees the API and the web upload produce identical rows. */
+function assembleCard(f: CardFields, sourceFile: string): ParsedCard {
+  const panLast4 = f.pan.slice(-4);
+  const identityKey = computeIdentityKey({
+    firstName: f.firstName, lastName: f.lastName, panLast4, expMonth: f.expMonth, expYear: f.expYear,
+  });
+  const cardData = {
+    cardholder: { first_name: f.firstName, last_name: f.lastName },
+    card: {
+      pan_encrypted: encrypt(f.pan),
+      cvv_encrypted: encrypt(f.cvv),
+      exp_month: f.expMonth,
+      exp_year: f.expYear,
+    },
+    billing_address: { street: f.address, city: f.city, state: f.state, zip_code: f.zipCode },
+    contact: { phone: f.phone, email: f.email, ip_address: f.ipAddress },
+    source_file: sourceFile,
+    created_at: nowBkk().toISOString(),
+  };
+  return { identityKey, panLast4, cardData: JSON.stringify(cardData) };
+}
+
 export function parseCardsCsv(text: string, sourceFile: string): ParseResult {
   const { data } = Papa.parse<Record<string, string>>(text, {
     header: true,
@@ -123,35 +157,21 @@ export function parseCardsCsv(text: string, sourceFile: string): ParseResult {
       expired++;
     }
 
-    const firstName = pick(row, "First Name", "FirstName");
-    const lastName = pick(row, "Last Name", "LastName");
-    const panLast4 = pan.slice(-4);
-    const identityKey = computeIdentityKey({ firstName, lastName, panLast4, expMonth, expYear });
-
-    const cardData = {
-      cardholder: { first_name: firstName, last_name: lastName },
-      card: {
-        pan_encrypted: encrypt(pan),
-        cvv_encrypted: encrypt(cvv),
-        exp_month: expMonth,
-        exp_year: expYear,
-      },
-      billing_address: {
-        street: pick(row, "Address", "AdrLine1", "Address1"),
-        city: pick(row, "City"),
-        state: pick(row, "State"),
-        zip_code: pick(row, "Zip Code", "ZipCode", "Postal Code"),
-      },
-      contact: {
-        phone: pick(row, "Phone Number", "PhoneNum", "Phone"),
-        email: pick(row, "Email Address", "EmailAdr", "Email"),
-        ip_address: pick(row, "IP Address", "IPAdr", "IP"),
-      },
-      source_file: sourceFile,
-      created_at: nowBkk().toISOString(),
-    };
-
-    cards.push({ identityKey, panLast4, cardData: JSON.stringify(cardData) });
+    cards.push(assembleCard({
+      pan,
+      cvv,
+      expMonth,
+      expYear,
+      firstName: pick(row, "First Name", "FirstName"),
+      lastName: pick(row, "Last Name", "LastName"),
+      address: pick(row, "Address", "AdrLine1", "Address1"),
+      city: pick(row, "City"),
+      state: pick(row, "State"),
+      zipCode: pick(row, "Zip Code", "ZipCode", "Postal Code"),
+      phone: pick(row, "Phone Number", "PhoneNum", "Phone"),
+      email: pick(row, "Email Address", "EmailAdr", "Email"),
+      ipAddress: pick(row, "IP Address", "IPAdr", "IP"),
+    }, sourceFile));
   });
 
   return {
@@ -159,5 +179,98 @@ export function parseCardsCsv(text: string, sourceFile: string): ParseResult {
     errors,
     warnings,
     stats: { total: data.length, valid: cards.length, invalidPan, expired, duplicatesInFile, missingFields },
+  };
+}
+
+/** One card as accepted by the JSON ingest endpoint. Keys are flexible
+ *  (camelCase / snake_case / a couple of aliases) so callers don't have to
+ *  match one exact spelling; required fields are cardNumber, securityCode,
+ *  expMonth and expYear. Numbers are coerced to strings. */
+export type JsonCardInput = {
+  cardNumber?: string | number; pan?: string | number; card_number?: string | number;
+  securityCode?: string | number; cvv?: string | number; security_code?: string | number;
+  expMonth?: string | number; exp_month?: string | number;
+  expYear?: string | number; exp_year?: string | number;
+  firstName?: string; first_name?: string;
+  lastName?: string; last_name?: string;
+  address?: string; street?: string;
+  city?: string; state?: string;
+  zipCode?: string; zip?: string; zip_code?: string; postalCode?: string;
+  phone?: string; phoneNumber?: string; phone_number?: string;
+  email?: string; emailAddress?: string; email_address?: string;
+  ipAddress?: string; ip?: string; ip_address?: string;
+};
+
+/** Coerce any JSON scalar to a trimmed string ("" for null/undefined). */
+function asStr(v: unknown): string {
+  if (v === undefined || v === null) return "";
+  return String(v).trim();
+}
+
+/**
+ * JSON sibling of {@link parseCardsCsv}. Same validation, same dedup semantics,
+ * same stored row shape — it only differs in how each row's fields are read.
+ * Rows are validated in order: required-fields → PAN/Luhn → in-batch duplicate
+ * PAN → expiry (warning only), exactly as the CSV path.
+ */
+export function parseCardsJson(rows: unknown[], sourceFile: string): ParseResult {
+  const cards: ParsedCard[] = [];
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const seen = new Set<string>();
+  let invalidPan = 0, expired = 0, duplicatesInFile = 0, missingFields = 0;
+
+  rows.forEach((raw, idx) => {
+    const n = idx + 1;
+    const r = (raw ?? {}) as JsonCardInput;
+    const pan = asStr(r.cardNumber ?? r.pan ?? r.card_number);
+    const cvv = asStr(r.securityCode ?? r.cvv ?? r.security_code);
+    const expMonth = asStr(r.expMonth ?? r.exp_month);
+    const expYear = asStr(r.expYear ?? r.exp_year);
+
+    if (!pan || !cvv || !expMonth || !expYear) {
+      errors.push(`Card ${n}: missing required field (cardNumber, securityCode, expMonth, expYear)`);
+      missingFields++;
+      return;
+    }
+    if (!/^\d{13,19}$/.test(pan) || !luhnOk(pan)) {
+      errors.push(`Card ${n}: invalid PAN format / Luhn check failed`);
+      invalidPan++;
+      return;
+    }
+    if (seen.has(pan)) {
+      warnings.push(`Card ${n}: duplicate PAN ending ${pan.slice(-4)} (skipped)`);
+      duplicatesInFile++;
+      return;
+    }
+    seen.add(pan);
+
+    if (isExpired(expMonth, expYear)) {
+      warnings.push(`Card ${n}: card ending ${pan.slice(-4)} expired ${expMonth}/${expYear}`);
+      expired++;
+    }
+
+    cards.push(assembleCard({
+      pan,
+      cvv,
+      expMonth,
+      expYear,
+      firstName: asStr(r.firstName ?? r.first_name),
+      lastName: asStr(r.lastName ?? r.last_name),
+      address: asStr(r.address ?? r.street),
+      city: asStr(r.city),
+      state: asStr(r.state),
+      zipCode: asStr(r.zipCode ?? r.zip ?? r.zip_code ?? r.postalCode),
+      phone: asStr(r.phone ?? r.phoneNumber ?? r.phone_number),
+      email: asStr(r.email ?? r.emailAddress ?? r.email_address),
+      ipAddress: asStr(r.ipAddress ?? r.ip ?? r.ip_address),
+    }, sourceFile));
+  });
+
+  return {
+    cards,
+    errors,
+    warnings,
+    stats: { total: rows.length, valid: cards.length, invalidPan, expired, duplicatesInFile, missingFields },
   };
 }

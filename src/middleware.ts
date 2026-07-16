@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/api/tick"];
+// /api/cards authenticates with its own bearer token (INGEST_TOKEN), so it must
+// bypass the session-cookie gate here.
+const PUBLIC_PATHS = ["/login", "/api/tick", "/api/cards"];
 
 export function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;

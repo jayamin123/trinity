@@ -14,6 +14,7 @@ export type ActivityRow = {
   card: string;
   planned: string;
   executed: string;
+  executedProduct: string;
   amountPaid: number | null;
   actualMid: string | null;
   cascade: boolean;
@@ -49,8 +50,10 @@ export default function ActivityTable({ rows }: { rows: ActivityRow[] }) {
   const [midFilter, setMidFilter] = useState("");
   const [cascadeFilter, setCascadeFilter] = useState<"all" | "yes" | "no">("all");
   const [messageFilter, setMessageFilter] = useState("");
+  const [productFilter, setProductFilter] = useState("");
 
   const flows = useMemo(() => [...new Set(rows.map(r => r.flow).filter(Boolean))].sort(), [rows]);
+  const products = useMemo(() => [...new Set(rows.map(r => r.executedProduct).filter(Boolean))].sort(), [rows]);
   const amounts = useMemo(() => [...new Set(rows.map(r => r.amountPaid))].sort((a, b) => (a ?? -1) - (b ?? -1)), [rows]);
   const mids = useMemo(() => [...new Set(rows.map(r => r.actualMid ?? "—"))].sort(), [rows]);
   const messages = useMemo(() => [...new Set(rows.map(r => r.message).filter(Boolean))].sort(), [rows]);
@@ -62,8 +65,9 @@ export default function ActivityTable({ rows }: { rows: ActivityRow[] }) {
     if (cascadeFilter === "yes" && !r.cascade) return false;
     if (cascadeFilter === "no" && r.cascade) return false;
     if (messageFilter && r.message !== messageFilter) return false;
+    if (productFilter && r.executedProduct !== productFilter) return false;
     return true;
-  }), [rows, flowFilter, amountFilter, midFilter, cascadeFilter, messageFilter]);
+  }), [rows, flowFilter, amountFilter, midFilter, cascadeFilter, messageFilter, productFilter]);
 
   return (
     <>
@@ -71,6 +75,10 @@ export default function ActivityTable({ rows }: { rows: ActivityRow[] }) {
         <TextField select size="small" label="Flow" value={flowFilter} onChange={e => setFlowFilter(e.target.value)} sx={{ minWidth: 180 }}>
           <MenuItem value="">All flows</MenuItem>
           {flows.map(f => <MenuItem key={f} value={f}>{f}</MenuItem>)}
+        </TextField>
+        <TextField select size="small" label="Product" value={productFilter} onChange={e => setProductFilter(e.target.value)} sx={{ minWidth: 160 }}>
+          <MenuItem value="">All products</MenuItem>
+          {products.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
         </TextField>
         <TextField select size="small" label="Amount" value={amountFilter} onChange={e => setAmountFilter(e.target.value)} sx={{ minWidth: 130 }}>
           <MenuItem value="">All</MenuItem>

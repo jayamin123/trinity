@@ -59,12 +59,25 @@ export default function PlanTab({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [firedScheduleId, setFiredScheduleId] = useState<string | null>(null);
   const [pendingScheduleId, setPendingScheduleId] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<"future" | "past" | "all">("future");
+  const [showFilter, setShowFilter] = useState<"all" | "failed">("all");
 
   if (rollup.length === 0) {
     return <Typography color="text.secondary">No schedules yet.</Typography>;
   }
 
-  const totals = rollup.reduce(
+  // Default view hides days before today (BKK). d.date is already the BKK date.
+  const todayBkk = dayjs.utc(Date.now() + 7 * 3600 * 1000).format("YYYY-MM-DD");
+  let days = rollup;
+  if (dateFilter === "future") days = days.filter(d => d.date >= todayBkk);
+  else if (dateFilter === "past") days = days.filter(d => d.date < todayBkk);
+  if (showFilter === "failed") {
+    days = days
+      .filter(d => d.failed > 0)
+      .map(d => ({ ...d, cards: d.cards.filter(c => c.status === "fired-failed") }));
+  }
+
+  const totals = days.reduce(
     (acc, d) => ({
       scheduled: acc.scheduled + d.scheduled,
       succeeded: acc.succeeded + d.succeeded,
@@ -77,7 +90,27 @@ export default function PlanTab({
   return (
     <Card>
       <CardContent>
-        <Typography variant="h6" gutterBottom>Daily schedule</Typography>
+        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+          <Typography variant="h6">Daily schedule</Typography>
+          <Box sx={{ flexGrow: 1 }} />
+          <TextField
+            select size="small" label="When" value={dateFilter}
+            onChange={e => setDateFilter(e.target.value as "future" | "past" | "all")}
+            sx={{ minWidth: 120 }}
+          >
+            <MenuItem value="future">Future</MenuItem>
+            <MenuItem value="past">Past</MenuItem>
+            <MenuItem value="all">All</MenuItem>
+          </TextField>
+          <TextField
+            select size="small" label="Show" value={showFilter}
+            onChange={e => setShowFilter(e.target.value as "all" | "failed")}
+            sx={{ minWidth: 130 }}
+          >
+            <MenuItem value="all">All</MenuItem>
+            <MenuItem value="failed">Only failed</MenuItem>
+          </TextField>
+        </Stack>
         <Table>
           <TableHead>
             <TableRow>
@@ -90,7 +123,14 @@ export default function PlanTab({
             </TableRow>
           </TableHead>
           <TableBody>
-            {rollup.map(day => {
+            {days.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6}>
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>No schedules match this filter.</Typography>
+                </TableCell>
+              </TableRow>
+            )}
+            {days.map(day => {
               const isExpanded = !!expanded[day.date];
               return (
                 <Fragment key={day.date}>

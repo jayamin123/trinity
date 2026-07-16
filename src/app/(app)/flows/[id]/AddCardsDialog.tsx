@@ -2,7 +2,7 @@
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Stack,
   Box, Typography, Alert, LinearProgress, Table, TableHead, TableRow, TableCell,
-  TableBody, InputAdornment, IconButton,
+  TableBody, InputAdornment, IconButton, Checkbox, Chip,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import CreditCardIcon from "@mui/icons-material/CreditCard";
@@ -45,12 +45,19 @@ export default function AddCardsDialog({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Bulk-fill helpers for the product picker.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [priceFilter, setPriceFilter] = useState<number | null>(null);
+  const [bulkN, setBulkN] = useState(1);
 
   function reset() {
     const initial: typeof picks = {};
     for (const p of availableProducts) initial[p.id] = { count: 0, price: p.price };
     setProducts(availableProducts);
     setPicks(initial);
+    setSelected(new Set());
+    setPriceFilter(null);
+    setBulkN(1);
     setStartDate(defaultStart);
     setEndDate(defaultEnd);
     setPreview(null);
@@ -80,6 +87,58 @@ export default function AddCardsDialog({
   }
   function setPrice(id: string, price: number) {
     setPicks(prev => ({ ...prev, [id]: { count: prev[id]?.count ?? 0, price: Math.max(0, price) } }));
+  }
+
+  // Quick-filter products by their catalog price, so you can e.g. select every
+  // $5.25 product and fill them in one go.
+  const priceGroups = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const p of products) m.set(p.price, (m.get(p.price) ?? 0) + 1);
+    return [...m.entries()].map(([price, n]) => ({ price, n })).sort((a, b) => a.price - b.price);
+  }, [products]);
+  const visibleProducts = useMemo(
+    () => (priceFilter == null ? products : products.filter(p => p.price === priceFilter)),
+    [products, priceFilter],
+  );
+  const allVisibleSelected = visibleProducts.length > 0 && visibleProducts.every(p => selected.has(p.id));
+  const someVisibleSelected = visibleProducts.some(p => selected.has(p.id));
+
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+  function toggleSelectAllVisible() {
+    setSelected(prev => {
+      const n = new Set(prev);
+      if (allVisibleSelected) visibleProducts.forEach(p => n.delete(p.id));
+      else visibleProducts.forEach(p => n.add(p.id));
+      return n;
+    });
+  }
+  // Set every selected product's count to v.
+  function applySetTo(v: number) {
+    const val = Math.max(0, v | 0);
+    setPicks(prev => {
+      const next = { ...prev };
+      for (const id of selected) next[id] = { count: val, price: next[id]?.price ?? 0 };
+      return next;
+    });
+  }
+  // Randomly scatter `total` cards across the selected products (sums to total).
+  function applyDistribute(total: number) {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    const t = Math.max(0, total | 0);
+    const counts = new Array(ids.length).fill(0);
+    for (let i = 0; i < t; i++) counts[Math.floor(Math.random() * ids.length)]++;
+    setPicks(prev => {
+      const next = { ...prev };
+      ids.forEach((id, i) => { next[id] = { count: counts[i], price: next[id]?.price ?? 0 }; });
+      return next;
+    });
   }
 
   const totalCards = useMemo(
@@ -194,17 +253,59 @@ export default function AddCardsDialog({
                 </Button>
               }
             >
+              {priceGroups.length > 1 && (
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
+                  <Chip
+                    label={`All (${products.length})`} size="small"
+                    variant={priceFilter == null ? "filled" : "outlined"}
+                    color={priceFilter == null ? "primary" : "default"}
+                    onClick={() => setPriceFilter(null)}
+                  />
+                  {priceGroups.map(g => (
+                    <Chip
+                      key={g.price} label={`$${g.price.toFixed(2)} (${g.n})`} size="small"
+                      variant={priceFilter === g.price ? "filled" : "outlined"}
+                      color={priceFilter === g.price ? "primary" : "default"}
+                      onClick={() => setPriceFilter(priceFilter === g.price ? null : g.price)}
+                    />
+                  ))}
+                </Stack>
+              )}
+
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 76 }}>{selected.size} selected</Typography>
+                <TextField
+                  type="number" size="small" label="N" value={bulkN}
+                  onChange={e => setBulkN(Math.max(0, Number(e.target.value) || 0))}
+                  sx={{ width: 80 }} inputProps={{ min: 0 }}
+                />
+                <Button size="small" variant="outlined" disabled={selected.size === 0} onClick={() => applySetTo(bulkN)}>Set to {bulkN}</Button>
+                <Button size="small" variant="outlined" disabled={selected.size === 0} onClick={() => applyDistribute(bulkN)}>Distribute {bulkN}</Button>
+                <Button size="small" variant="text" color="inherit" disabled={selected.size === 0} onClick={() => applySetTo(0)}>Clear</Button>
+              </Stack>
+
               <Table size="small">
                 <TableHead>
                   <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        size="small"
+                        checked={allVisibleSelected}
+                        indeterminate={!allVisibleSelected && someVisibleSelected}
+                        onChange={toggleSelectAllVisible}
+                      />
+                    </TableCell>
                     <TableCell>Product</TableCell>
                     <TableCell align="right" sx={{ width: 150 }}>Price</TableCell>
                     <TableCell align="right" sx={{ width: 100 }}>Count</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {products.map(p => (
-                    <TableRow key={p.id}>
+                  {visibleProducts.map(p => (
+                    <TableRow key={p.id} selected={selected.has(p.id)}>
+                      <TableCell padding="checkbox">
+                        <Checkbox size="small" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} />
+                      </TableCell>
                       <TableCell>{p.name} <span style={{ color: "#888" }}>#{p.id}</span></TableCell>
                       <TableCell align="right">
                         <TextField
@@ -228,7 +329,7 @@ export default function AddCardsDialog({
                     </TableRow>
                   ))}
                   <TableRow sx={{ bgcolor: "#f5f5f5" }}>
-                    <TableCell><b>Total to add</b></TableCell>
+                    <TableCell colSpan={2}><b>Total to add</b></TableCell>
                     <TableCell />
                     <TableCell align="right"><b>{totalCards}</b></TableCell>
                   </TableRow>

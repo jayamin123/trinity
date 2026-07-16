@@ -30,6 +30,8 @@ export default async function ActivityPage() {
       executed: last
         ? `${last.amount_paid != null ? "$" + last.amount_paid.toFixed(2) : "—"} · MID ${last.actual_cc_gateway_id ?? "—"}`
         : "—",
+      amountPaid: last?.amount_paid ?? null,
+      actualMid: last?.actual_cc_gateway_id ?? null,
       cascade: last?.cascade_used ?? false,
       success: s.success,
       message: last?.cc_response.message ?? "—",

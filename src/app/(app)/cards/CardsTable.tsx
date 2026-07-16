@@ -80,10 +80,8 @@ export default function CardsTable({ rows, counts }: { rows: CardRow[]; counts: 
     if (balanceFilter === "unlim" && r.amount !== "unlim") return false;
     if (balanceFilter === "numbered" && typeof r.amount !== "number") return false;
     if (sourceFilter && r.source !== sourceFilter) return false;
-    if (tab === "fired") {
-      if (flowFilter && r.flowName !== flowFilter) return false;
-      if (verdictFilter !== "all" && r.ccVerdict !== verdictFilter) return false;
-    }
+    if ((tab === "fired" || tab === "pending") && flowFilter && r.flowName !== flowFilter) return false;
+    if (tab === "fired" && verdictFilter !== "all" && r.ccVerdict !== verdictFilter) return false;
     return true;
   }), [base, balanceFilter, sourceFilter, flowFilter, verdictFilter, tab]);
 
@@ -118,27 +116,27 @@ export default function CardsTable({ rows, counts }: { rows: CardRow[]; counts: 
           <MenuItem value="">All sources</MenuItem>
           {sourceOptions.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
         </TextField>
+        {(tab === "fired" || tab === "pending") && (
+          <TextField
+            select size="small" label="Flow" value={flowFilter}
+            onChange={e => setFlowFilter(e.target.value)}
+            sx={{ minWidth: 180 }}
+          >
+            <MenuItem value="">All flows</MenuItem>
+            {flowOptions.map(f => <MenuItem key={f} value={f}>{f}</MenuItem>)}
+          </TextField>
+        )}
         {tab === "fired" && (
-          <>
-            <TextField
-              select size="small" label="Flow" value={flowFilter}
-              onChange={e => setFlowFilter(e.target.value)}
-              sx={{ minWidth: 180 }}
-            >
-              <MenuItem value="">All flows</MenuItem>
-              {flowOptions.map(f => <MenuItem key={f} value={f}>{f}</MenuItem>)}
-            </TextField>
-            <TextField
-              select size="small" label="CC verdict" value={verdictFilter}
-              onChange={e => setVerdictFilter(e.target.value as VerdictFilter)}
-              sx={{ minWidth: 150 }}
-            >
-              <MenuItem value="all">All</MenuItem>
-              <MenuItem value="success">Success</MenuItem>
-              <MenuItem value="failed">Failed</MenuItem>
-              <MenuItem value="cascade">Cascade</MenuItem>
-            </TextField>
-          </>
+          <TextField
+            select size="small" label="CC verdict" value={verdictFilter}
+            onChange={e => setVerdictFilter(e.target.value as VerdictFilter)}
+            sx={{ minWidth: 150 }}
+          >
+            <MenuItem value="all">All</MenuItem>
+            <MenuItem value="success">Success</MenuItem>
+            <MenuItem value="failed">Failed</MenuItem>
+            <MenuItem value="cascade">Cascade</MenuItem>
+          </TextField>
         )}
       </Stack>
 

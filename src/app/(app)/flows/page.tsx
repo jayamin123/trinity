@@ -1,6 +1,6 @@
 import { Box, Card, CardContent, Typography, Button, Stack, Chip, LinearProgress, Alert } from "@mui/material";
 import { db } from "@/lib/db";
-import { parseFlowSettings } from "@/lib/flows";
+import { parseFlowSettings, summarizeProductMix } from "@/lib/flows";
 import { formatBkk } from "@/lib/bkk";
 import Link from "next/link";
 
@@ -77,7 +77,7 @@ export default async function FlowsPage() {
                         {" · "}
                         {settings.cc_campaign.name} (MID {settings.cc_gateway.id})
                         {" · "}
-                        {settings.cc_products.map(p => `${p.count}× ${p.name}`).join(", ")}
+                        {summarizeProductMix(settings.cc_products)}
                       </Typography>
                       <Box sx={{ mt: 2 }}>
                         <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 0.5 }}>

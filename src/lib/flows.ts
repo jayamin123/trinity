@@ -60,6 +60,17 @@ export function flowCardSource(settings: FlowSettings): CardSource {
   return settings.card_source ?? "topup";
 }
 
+/** Compact one-line product-mix summary for headers. Lists the first few
+ *  products with a count > 0, then "… +N more", so a 100-product campaign
+ *  doesn't sprawl across the page. Returns "—" when nothing has a count yet. */
+export function summarizeProductMix(products: CCProduct[], maxShown = 6): string {
+  const active = products.filter(p => p.count > 0);
+  if (active.length === 0) return "—";
+  const shown = active.slice(0, maxShown).map(p => `${p.count}× ${p.name}`).join(", ");
+  const extra = active.length - maxShown;
+  return extra > 0 ? `${shown} … +${extra} more` : shown;
+}
+
 export function parseFlowSettings(json: string): FlowSettings {
   return JSON.parse(json) as FlowSettings;
 }

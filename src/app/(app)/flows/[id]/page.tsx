@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Box, Typography, Chip, Stack, Button } from "@mui/material";
 import { db } from "@/lib/db";
-import { parseFlowSettings, getFlowDayRollup, flowCardSource } from "@/lib/flows";
+import { parseFlowSettings, getFlowDayRollup, flowCardSource, summarizeProductMix } from "@/lib/flows";
 import { countTopupPool, countUnlimAvailable } from "@/lib/cards";
 import { formatBkk, nowBkk } from "@/lib/bkk";
 import dayjs from "dayjs";
@@ -115,7 +115,7 @@ export default async function FlowDetailPage({
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Product mix:{" "}
-            {settings.cc_products.map(p => `${p.count}× ${p.name}`).join(", ")}
+            {summarizeProductMix(settings.cc_products)}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             {firedCount}/{settings.total_cards} fired · {succeededCount} succeeded
@@ -131,7 +131,7 @@ export default async function FlowDetailPage({
               poolCount={poolCount}
               defaultStart={addDefaultStart}
               defaultEnd={addDefaultEnd}
-              currentMix={settings.cc_products.map(p => `${p.count}× ${p.name}`).join(", ")}
+              currentMix={summarizeProductMix(settings.cc_products)}
               gatewayId={settings.cc_gateway.id}
               campaignName={settings.cc_campaign.name}
             />

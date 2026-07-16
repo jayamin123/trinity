@@ -165,7 +165,7 @@ const columns: GridColDef[] = [
   },
   {
     field: "amount",
-    headerName: "Amount",
+    headerName: "Initial Bal",
     width: 120,
     valueGetter: (_v, row: CardRow) => amountLabel(row.amount),
     sortComparator: (_v1, _v2, p1, p2) =>

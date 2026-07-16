@@ -38,27 +38,15 @@ export type CCGateway = { id: string; name: string };
 export type CCCampaign = { id: string; name: string };
 export type CCProduct = { id: string; name: string; price: number; count: number };
 
-/** Which card population a flow draws from. "topup" = the single-use pool
- *  (default; also the value assumed when the field is absent on older flows).
- *  "unlim" = the reusable unlimited roster, once per flow. */
-export type CardSource = "topup" | "unlim";
-
 export type FlowSettings = {
   schedule_window: ScheduleWindow;
   lifecycle: FlowLifecycle;
   cc_gateway: CCGateway;
   cc_campaign: CCCampaign;
   cc_products: CCProduct[];
-  card_source?: CardSource;
   total_cards: number;
   created_at: string;
 };
-
-/** Read a flow's card source, defaulting to "topup" for flows created before
- *  the field existed. */
-export function flowCardSource(settings: FlowSettings): CardSource {
-  return settings.card_source ?? "topup";
-}
 
 /** Compact one-line product-mix summary for headers. Lists the first few
  *  products with a count > 0, then "… +N more", so a 100-product campaign

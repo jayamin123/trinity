@@ -2,7 +2,7 @@
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Stack,
   Box, Typography, Alert, LinearProgress, Table, TableHead, TableRow, TableCell,
-  TableBody, InputAdornment, IconButton, Checkbox, Chip,
+  TableBody, InputAdornment, IconButton, Checkbox, Menu, MenuItem,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import CreditCardIcon from "@mui/icons-material/CreditCard";
@@ -12,12 +12,20 @@ import BusinessIcon from "@mui/icons-material/Business";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import { useMemo, useState } from "react";
 import { previewAddSchedule, addCardsToFlow, refreshFlowProducts } from "./actions";
+import { type DistributionShape } from "@/lib/schedule";
 import { InfoBar, SectionCard } from "@/components/modal-shared";
 
 type Product = { id: string; name: string; price: number };
 type PreviewDay = { date: string; count: number };
+
+/** Trailing number in a product name, e.g. "Clq B101" -> 101. */
+function productNameNumber(name: string): number | null {
+  const m = name.match(/(\d+)(?!.*\d)/);
+  return m ? Number(m[1]) : null;
+}
 
 export default function AddCardsDialog({
   flowId, flowName, availableProducts, poolCount, defaultStart, defaultEnd,
@@ -47,8 +55,14 @@ export default function AddCardsDialog({
   const [error, setError] = useState<string | null>(null);
   // Bulk-fill helpers for the product picker.
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [priceFilter, setPriceFilter] = useState<number | null>(null);
   const [bulkN, setBulkN] = useState(1);
+  // Smart filter (left side): pick a field, then filter on it.
+  const [filterField, setFilterField] = useState<"product" | "price">("price");
+  const [nameOp, setNameOp] = useState<"above" | "below" | "between">("above");
+  const [nameA, setNameA] = useState<string>("");
+  const [nameB, setNameB] = useState<string>("");
+  const [priceValue, setPriceValue] = useState<string>(""); // "" = all prices
+  const [rollAnchor, setRollAnchor] = useState<null | HTMLElement>(null);
 
   function reset() {
     const initial: typeof picks = {};
@@ -56,8 +70,12 @@ export default function AddCardsDialog({
     setProducts(availableProducts);
     setPicks(initial);
     setSelected(new Set());
-    setPriceFilter(null);
     setBulkN(1);
+    setFilterField("price");
+    setNameOp("above");
+    setNameA("");
+    setNameB("");
+    setPriceValue("");
     setStartDate(defaultStart);
     setEndDate(defaultEnd);
     setPreview(null);
@@ -89,17 +107,30 @@ export default function AddCardsDialog({
     setPicks(prev => ({ ...prev, [id]: { count: prev[id]?.count ?? 0, price: Math.max(0, price) } }));
   }
 
-  // Quick-filter products by their catalog price, so you can e.g. select every
-  // $5.25 product and fill them in one go.
-  const priceGroups = useMemo(() => {
-    const m = new Map<number, number>();
-    for (const p of products) m.set(p.price, (m.get(p.price) ?? 0) + 1);
-    return [...m.entries()].map(([price, n]) => ({ price, n })).sort((a, b) => a.price - b.price);
-  }, [products]);
-  const visibleProducts = useMemo(
-    () => (priceFilter == null ? products : products.filter(p => p.price === priceFilter)),
-    [products, priceFilter],
+  // Distinct catalog prices for the Price filter.
+  const availablePrices = useMemo(
+    () => [...new Set(products.map(p => p.price))].sort((a, b) => a - b),
+    [products],
   );
+  // Products left visible by the smart filter (Field → filter).
+  const visibleProducts = useMemo(() => {
+    if (filterField === "price") {
+      if (priceValue === "") return products;
+      const pv = Number(priceValue);
+      return products.filter(p => p.price === pv);
+    }
+    const a = nameA === "" ? null : Number(nameA);
+    const b = nameB === "" ? null : Number(nameB);
+    return products.filter(p => {
+      const n = productNameNumber(p.name);
+      if (n === null) return false;
+      if (nameOp === "above") return a === null || n > a;
+      if (nameOp === "below") return a === null || n < a;
+      if (a !== null && n < a) return false;
+      if (b !== null && n > b) return false;
+      return true;
+    });
+  }, [products, filterField, priceValue, nameOp, nameA, nameB]);
   const allVisibleSelected = visibleProducts.length > 0 && visibleProducts.every(p => selected.has(p.id));
   const someVisibleSelected = visibleProducts.some(p => selected.has(p.id));
 
@@ -146,13 +177,14 @@ export default function AddCardsDialog({
     [picks],
   );
 
-  async function rollPreview() {
+  async function rollPreview(shape: DistributionShape = "even") {
+    setRollAnchor(null);
     setError(null);
     if (totalCards <= 0) { setError("Pick at least one card"); return; }
     if (totalCards > poolCount) { setError(`Only ${poolCount} cards in pool`); return; }
     setPreviewLoading(true);
     try {
-      const result = await previewAddSchedule(totalCards, startDate, endDate);
+      const result = await previewAddSchedule(totalCards, startDate, endDate, shape);
       setPreview(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Preview failed");
@@ -253,35 +285,66 @@ export default function AddCardsDialog({
                 </Button>
               }
             >
-              {priceGroups.length > 1 && (
-                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
-                  <Chip
-                    label={`All (${products.length})`} size="small"
-                    variant={priceFilter == null ? "filled" : "outlined"}
-                    color={priceFilter == null ? "primary" : "default"}
-                    onClick={() => setPriceFilter(null)}
-                  />
-                  {priceGroups.map(g => (
-                    <Chip
-                      key={g.price} label={`$${g.price.toFixed(2)} (${g.n})`} size="small"
-                      variant={priceFilter === g.price ? "filled" : "outlined"}
-                      color={priceFilter === g.price ? "primary" : "default"}
-                      onClick={() => setPriceFilter(priceFilter === g.price ? null : g.price)}
-                    />
-                  ))}
+              <Stack direction="row" spacing={2} alignItems="flex-start" justifyContent="space-between" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+                {/* LEFT — smart filter: pick a field, then filter on it */}
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                  <TextField
+                    select size="small" label="Filter" value={filterField}
+                    onChange={e => setFilterField(e.target.value as "product" | "price")}
+                    sx={{ minWidth: 110 }}
+                  >
+                    <MenuItem value="product">Product</MenuItem>
+                    <MenuItem value="price">Price</MenuItem>
+                  </TextField>
+                  {filterField === "price" ? (
+                    <TextField
+                      select size="small" label="Price" value={priceValue}
+                      onChange={e => setPriceValue(e.target.value)}
+                      sx={{ minWidth: 120 }}
+                    >
+                      <MenuItem value="">All prices</MenuItem>
+                      {availablePrices.map(pr => <MenuItem key={pr} value={String(pr)}>${pr.toFixed(2)}</MenuItem>)}
+                    </TextField>
+                  ) : (
+                    <>
+                      <TextField
+                        select size="small" label="Name #" value={nameOp}
+                        onChange={e => setNameOp(e.target.value as "above" | "below" | "between")}
+                        sx={{ minWidth: 110 }}
+                      >
+                        <MenuItem value="above">Above</MenuItem>
+                        <MenuItem value="below">Below</MenuItem>
+                        <MenuItem value="between">Between</MenuItem>
+                      </TextField>
+                      <TextField
+                        type="number" size="small" label={nameOp === "between" ? "From" : "Value"}
+                        value={nameA} onChange={e => setNameA(e.target.value)}
+                        sx={{ width: 90 }} inputProps={{ min: 0 }}
+                      />
+                      {nameOp === "between" && (
+                        <TextField
+                          type="number" size="small" label="To"
+                          value={nameB} onChange={e => setNameB(e.target.value)}
+                          sx={{ width: 90 }} inputProps={{ min: 0 }}
+                        />
+                      )}
+                    </>
+                  )}
+                  <Typography variant="caption" color="text.secondary">{visibleProducts.length} shown</Typography>
                 </Stack>
-              )}
 
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 76 }}>{selected.size} selected</Typography>
-                <TextField
-                  type="number" size="small" label="N" value={bulkN}
-                  onChange={e => setBulkN(Math.max(0, Number(e.target.value) || 0))}
-                  sx={{ width: 80 }} inputProps={{ min: 0 }}
-                />
-                <Button size="small" variant="outlined" disabled={selected.size === 0} onClick={() => applySetTo(bulkN)}>Set to {bulkN}</Button>
-                <Button size="small" variant="outlined" disabled={selected.size === 0} onClick={() => applyDistribute(bulkN)}>Distribute {bulkN}</Button>
-                <Button size="small" variant="text" color="inherit" disabled={selected.size === 0} onClick={() => applySetTo(0)}>Clear</Button>
+                {/* RIGHT — bulk counts on the checked rows */}
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                  <Typography variant="body2" color="text.secondary">{selected.size} selected</Typography>
+                  <TextField
+                    type="number" size="small" label="N" value={bulkN}
+                    onChange={e => setBulkN(Math.max(0, Number(e.target.value) || 0))}
+                    sx={{ width: 72 }} inputProps={{ min: 0 }}
+                  />
+                  <Button size="small" variant="outlined" disabled={selected.size === 0} onClick={() => applySetTo(bulkN)}>Set {bulkN}</Button>
+                  <Button size="small" variant="outlined" disabled={selected.size === 0} onClick={() => applyDistribute(bulkN)}>Distribute {bulkN}</Button>
+                  <Button size="small" variant="text" color="inherit" disabled={selected.size === 0} onClick={() => applySetTo(0)}>Clear</Button>
+                </Stack>
               </Stack>
 
               <Table size="small">
@@ -348,9 +411,21 @@ export default function AddCardsDialog({
               title="Preview"
               icon={<BarChartIcon />}
               action={
-                <Button onClick={rollPreview} variant="outlined" size="small" disabled={previewLoading || totalCards === 0}>
-                  {previewLoading ? "Generating…" : preview ? "🎲 Reroll" : "Generate preview"}
-                </Button>
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <Button onClick={() => rollPreview("even")} variant="outlined" size="small" disabled={previewLoading || totalCards === 0}>
+                    {previewLoading ? "Rolling…" : preview ? "🎲 Reroll" : "Roll"}
+                  </Button>
+                  <IconButton size="small" onClick={e => setRollAnchor(e.currentTarget)} disabled={previewLoading || totalCards === 0} title="Distribution shape">
+                    <ArrowDropDownIcon />
+                  </IconButton>
+                  <Menu anchorEl={rollAnchor} open={Boolean(rollAnchor)} onClose={() => setRollAnchor(null)}>
+                    <MenuItem onClick={() => rollPreview("even")}>Even (roll)</MenuItem>
+                    <MenuItem onClick={() => rollPreview("increasing")}>Increasing</MenuItem>
+                    <MenuItem onClick={() => rollPreview("decreasing")}>Decreasing</MenuItem>
+                    <MenuItem onClick={() => rollPreview("normal")}>Bell curve (heavier middle)</MenuItem>
+                    <MenuItem onClick={() => rollPreview("inverse")}>Edges (heavier start + end)</MenuItem>
+                  </Menu>
+                </Stack>
               }
             >
               {previewLoading && <LinearProgress sx={{ mt: 1 }} />}

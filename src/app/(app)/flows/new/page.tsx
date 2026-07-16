@@ -1,14 +1,15 @@
 import { Box, Typography, Alert, Card, CardContent } from "@mui/material";
 import { db } from "@/lib/db";
-import { countCardsInPool } from "@/lib/cards";
+import { countTopupPool, countUnlimAvailable } from "@/lib/cards";
 import { parseFlowSettings } from "@/lib/flows";
 import NewFlowForm, { type FlowSource } from "./NewFlowForm";
 
 export default async function NewFlowPage() {
-  const [account, existingFlows, poolCount] = await Promise.all([
+  const [account, existingFlows, topupPoolCount, unlimCount] = await Promise.all([
     db.account.findFirst(),
     db.flow.findMany({ orderBy: { createdAt: "desc" }, take: 20 }),
-    countCardsInPool(),
+    countTopupPool(),
+    countUnlimAvailable(),
   ]);
 
   // Existing flows act as the "preset library" — pick one, tweak, submit.
@@ -33,11 +34,11 @@ export default async function NewFlowPage() {
       </Typography>
 
       {!account && <Alert severity="warning" sx={{ mb: 2 }}>Add CheckoutChamp credentials in Settings first.</Alert>}
-      {poolCount === 0 && <Alert severity="warning" sx={{ mb: 2 }}>No cards in the pool — upload a CSV first.</Alert>}
+      {topupPoolCount === 0 && unlimCount === 0 && <Alert severity="warning" sx={{ mb: 2 }}>No cards available — upload a CSV first.</Alert>}
 
       <Card>
         <CardContent>
-          <NewFlowForm sources={sources} poolCount={poolCount} />
+          <NewFlowForm sources={sources} topupPoolCount={topupPoolCount} unlimCount={unlimCount} />
         </CardContent>
       </Card>
     </Box>

@@ -113,6 +113,7 @@ export default async function CardsPage({
     pool: rows.filter(r => r.status === "pool").length,
     pending: rows.filter(r => r.status === "pending").length,
     fired: rows.filter(r => r.status === "fired").length,
+    unlim: rows.filter(r => r.amount === "unlim").length,
     success: rows.filter(r => r.ccVerdict === "success").length,
     failed: rows.filter(r => r.ccVerdict === "failed").length,
     cascade: rows.filter(r => r.ccVerdict === "cascade").length,

@@ -30,12 +30,13 @@ export type CardCounts = {
   pool: number;
   pending: number;
   fired: number;
+  unlim: number;
   success: number;
   failed: number;
   cascade: number;
 };
 
-type TopTab = "all" | "pool" | "pending" | "fired";
+type TopTab = "all" | "pool" | "pending" | "fired" | "unlim";
 type FiredSubTab = "all" | "success" | "failed" | "cascade";
 
 export default function CardsTable({ rows, counts }: { rows: CardRow[]; counts: CardCounts }) {
@@ -46,6 +47,7 @@ export default function CardsTable({ rows, counts }: { rows: CardRow[]; counts: 
 
   const filtered = useMemo(() => {
     if (tab === "all") return rows;
+    if (tab === "unlim") return rows.filter(r => r.amount === "unlim");
     if (tab === "pool") return rows.filter(r => r.status === "pool");
     if (tab === "pending") return rows.filter(r => r.status === "pending");
     // fired
@@ -84,6 +86,7 @@ export default function CardsTable({ rows, counts }: { rows: CardRow[]; counts: 
         <Tab value="pool" label={`Pool (${counts.pool.toLocaleString()})`} />
         <Tab value="pending" label={`Pending (${counts.pending.toLocaleString()})`} />
         <Tab value="fired" label={`Fired (${counts.fired.toLocaleString()})`} />
+        <Tab value="unlim" label={`Unlimited (${counts.unlim.toLocaleString()})`} />
         <Tab value="all" label={`All (${counts.all.toLocaleString()})`} sx={{ ml: "auto" }} />
       </Tabs>
       {tab === "fired" && (

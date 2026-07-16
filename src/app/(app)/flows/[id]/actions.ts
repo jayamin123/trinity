@@ -1,10 +1,10 @@
 "use server";
 import { db } from "@/lib/db";
 import {
-  parseFlowSettings, parseFirePlan,
+  parseFlowSettings, parseFirePlan, flowCardSource,
   type FirePlan, type CCProduct,
 } from "@/lib/flows";
-import { pullCardsFromPool } from "@/lib/cards";
+import { pullTopupFromPool, pullUnlimForFlow } from "@/lib/cards";
 import { randomDailyCounts, stratifiedTimesForDay } from "@/lib/schedule";
 import { nowBkk, calendarDateBkk } from "@/lib/bkk";
 import { listProducts as listCCProducts, listGateways } from "@/lib/checkoutchamp";
@@ -115,8 +115,13 @@ export async function addCardsToFlow(input: AddCardsInput) {
     throw new Error(`Per-day schedule sums to ${perDaySum} but mix sums to ${totalToAdd}`);
   }
 
-  const cards = await pullCardsFromPool(totalToAdd);
-  if (cards.length < totalToAdd) throw new Error(`Only ${cards.length} cards in the pool — need ${totalToAdd}`);
+  const cards = flowCardSource(settings) === "unlim"
+    ? await pullUnlimForFlow(totalToAdd, input.flowId)
+    : await pullTopupFromPool(totalToAdd);
+  if (cards.length < totalToAdd) {
+    const kind = flowCardSource(settings) === "unlim" ? "unlimited (not already in this flow)" : "pool";
+    throw new Error(`Only ${cards.length} ${kind} cards available — need ${totalToAdd}`);
+  }
 
   // Shuffled (card, plan) sequence — same logic as createFlow.
   const planSequence: FirePlan[] = [];

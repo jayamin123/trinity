@@ -9,19 +9,22 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
-// FIVE TABLES, each with its rich data in one JSON column.
+// LEDGER-V2 SCHEMA (the rebuild).
 //
-// Foreign keys are RESTRICT everywhere — once schedules and flows exist they
-// are permanent. Schedules carry the fire history (every CheckoutChamp
-// attempt is appended to fire_attempts as a JSON entry). The user rule is:
-// do not delete any transactions. Restrict enforces that at the DB level.
+// The old model stored everything in JSON blobs and made a `schedules` row do
+// double duty (intent + fire result, with an append-only fire_attempts array).
+// This model splits that cleanly:
 //
-//   cards       (identity, deduped on identity_key)
-//   accounts    (CC tenant credentials)
-//   flow        (self-contained: cc_gateway + cc_campaign + cc_products live
-//                inside flow_settings; no separate "preset" table)
-//   schedules   (one row per intended fire — holds fire_plan + fire_attempts)
-//   admin_users (Trinity logins)
+//   • Real indexed columns instead of JSON blobs.
+//   • Card carries a DENORMALIZED `remainingBalance` (kept in sync on the
+//     charge/reserve path) so availability is `WHERE remaining_balance > 0`
+//     instead of a GROUP BY over every schedule.
+//   • `schedules` = the MUTABLE intent + current status (pending|processing|done).
+//   • `transactions` = an APPEND-ONLY ledger; one row per CheckoutChamp attempt.
+//     Flipping a schedule's status can never erase a charge record.
+//
+// relationMode = "prisma": no DB-level foreign keys (D1-friendly); integrity is
+// enforced in the service layer. Relations are modelled for query ergonomics.
 // ---------------------------------------------------------------------------
 
 model AdminUser {
@@ -34,82 +37,144 @@ model AdminUser {
 }
 
 model Account {
-  id                String     @id @default(uuid())
+  id                String   @id @default(uuid())
   name              String
-  apiUrl            String     @map("api_url")
-  loginIdEncrypted  String     @map("login_id_encrypted")
-  passwordEncrypted String     @map("password_encrypted")
-  createdAt         DateTime   @default(now()) @map("created_at")
+  apiUrl            String   @map("api_url")
+  loginIdEncrypted  String   @map("login_id_encrypted")
+  passwordEncrypted String   @map("password_encrypted")
+  createdAt         DateTime @default(now()) @map("created_at")
   flows             Flow[]
 
   @@map("accounts")
 }
 
 model Card {
-  id          String     @id @default(uuid())
-  /// lower(first_name)|lower(last_name)|pan_last4|exp_month|exp_year
-  identityKey String     @unique @map("identity_key")
-  panLast4    String     @map("pan_last4")
-  /// Single JSON blob:
-  ///   { cardholder: { first_name, last_name },
-  ///     card: { pan_encrypted, cvv_encrypted, exp_month, exp_year },
-  ///     billing_address: { street, city, state, zip_code },
-  ///     contact: { phone, email, ip_address },
-  ///     source_file, created_at }
-  cardData    String     @map("card_data")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  schedules   Schedule[]
+  id           String  @id @default(uuid())
+  /// lower(first)|lower(last)|pan_last4|exp_month|exp_year
+  identityKey  String  @unique @map("identity_key")
+  panLast4     String  @map("pan_last4")
+  panEnc       String  @map("pan_enc")
+  cvvEnc       String  @map("cvv_enc")
+  expMonth     String  @map("exp_month")
+  expYear      String  @map("exp_year")
+  firstName    String  @map("first_name")
+  lastName     String  @map("last_name")
+  email        String?
+  phone        String?
+  ipAddress    String? @map("ip_address")
+  street       String?
+  city         String?
+  state        String?
+  zipCode      String? @map("zip_code")
+  /// balance model. isUnlimited=1 → infinite (once per flow); else startBalance
+  /// is the starting balance and remainingBalance is kept in sync as charges
+  /// reserve/commit. A card is usable while unlimited OR remainingBalance > 0.
+  isUnlimited      Boolean @default(false) @map("is_unlimited")
+  startBalance     Float?  @map("start_balance")
+  remainingBalance Float?  @map("remaining_balance")
+  sourceFile   String?  @map("source_file")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  schedules    Schedule[]
+  transactions Transaction[]
 
   @@index([panLast4])
+  @@index([remainingBalance])
+  @@index([sourceFile])
   @@map("cards")
 }
 
 model Flow {
-  id           String     @id @default(uuid())
-  name         String
-  accountId    String     @map("account_id")
-  account      Account    @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  /// Single JSON blob — fully self-contained, no FK to a "preset" table:
-  ///   { schedule_window: { start_date, end_date },
-  ///     lifecycle: { status: 'active'|'paused'|'completed', paused_at, last_charged_at },
-  ///     cc_gateway: { id, name },
-  ///     cc_campaign: { id, name },
-  ///     cc_products: [{ id, name, price, count }],
-  ///     total_cards,
-  ///     created_at }
-  flowSettings String     @map("flow_settings")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  schedules    Schedule[]
+  id             String   @id @default(uuid())
+  name           String
+  accountId      String   @map("account_id")
+  account        Account  @relation(fields: [accountId], references: [id])
+  startDate      DateTime @map("start_date")
+  endDate        DateTime @map("end_date")
+  /// active | paused | completed
+  status         String   @default("active")
+  pausedAt       DateTime? @map("paused_at")
+  lastChargedAt  DateTime? @map("last_charged_at")
+  ccGatewayId    String?  @map("cc_gateway_id")
+  ccGatewayName  String?  @map("cc_gateway_name")
+  ccCampaignId   String?  @map("cc_campaign_id")
+  ccCampaignName String?  @map("cc_campaign_name")
+  totalCards     Int      @default(0) @map("total_cards")
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  @@map("flow")
+  products     FlowProduct[]
+  schedules    Schedule[]
+  transactions Transaction[]
+
+  @@index([status])
+  @@map("flows")
+}
+
+model FlowProduct {
+  id        String @id @default(uuid())
+  flowId    String @map("flow_id")
+  flow      Flow   @relation(fields: [flowId], references: [id])
+  productId String @map("product_id")
+  name      String?
+  price     Float
+  count     Int    @default(0)
+
+  @@index([flowId])
+  @@map("flow_products")
 }
 
 model Schedule {
-  id           String    @id @default(uuid())
-  cardId       String    @map("card_id")
-  card         Card      @relation(fields: [cardId], references: [id], onDelete: Restrict)
-  flowId       String    @map("flow_id")
-  flow         Flow      @relation(fields: [flowId], references: [id], onDelete: Restrict)
-  scheduledFor DateTime  @map("scheduled_for")
-  /// pending → processing → fired (lifecycle only — CC verdict lives on `success`)
-  status       String    @default("pending")
-  firedAt      DateTime? @map("fired_at")
-  orderId      String?   @map("order_id")
-  /// Ticked only after a successful CC fire. Stays false through pending/processing
-  /// and stays false on rows whose attempts all failed.
-  success      Boolean   @default(false)
-  /// Snapshot of the intended fire at schedule-creation time. Never changes after.
-  /// Shape: { product_id, product_name, price, cc_gateway_id }
-  firePlan     String    @map("fire_plan")
-  /// Append-only JSON array. Each entry is one CheckoutChamp /order/import/ call:
-  ///   { fired_at, order_id, success, amount_paid, actual_cc_gateway_id, cascade_used,
-  ///     cc_response: { code, message, raw } }
-  /// Retries push new entries; old attempts stay for the audit trail.
-  fireAttempts String    @default("[]") @map("fire_attempts")
-  createdAt    DateTime  @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  cardId       String   @map("card_id")
+  card         Card     @relation(fields: [cardId], references: [id])
+  flowId       String   @map("flow_id")
+  flow         Flow     @relation(fields: [flowId], references: [id])
+  scheduledFor DateTime @map("scheduled_for")
+  /// pending → processing → done. The CC verdict lives in `transactions`.
+  status       String   @default("pending")
+  productId    String?  @map("product_id")
+  productName  String?  @map("product_name")
+  price        Float
+  ccGatewayId  String?  @map("cc_gateway_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  transactions Transaction[]
 
   @@index([status, scheduledFor])
   @@index([flowId])
   @@index([cardId])
   @@map("schedules")
+}
+
+/// APPEND-ONLY ledger. One row per CheckoutChamp /order/import/ attempt.
+/// Never updated, never deleted — the permanent record of what happened to money.
+model Transaction {
+  id          String   @id @default(uuid())
+  scheduleId  String   @map("schedule_id")
+  schedule    Schedule @relation(fields: [scheduleId], references: [id])
+  cardId      String   @map("card_id")
+  card        Card     @relation(fields: [cardId], references: [id])
+  flowId      String   @map("flow_id")
+  flow        Flow     @relation(fields: [flowId], references: [id])
+  firedAt     DateTime @map("fired_at")
+  success     Boolean  @default(false)
+  orderId     String?  @map("order_id")
+  amountPaid  Float?   @map("amount_paid")
+  plannedMid  String?  @map("planned_mid")
+  actualMid   String?  @map("actual_mid")
+  cascadeUsed Boolean  @default(false) @map("cascade_used")
+  productId   String?  @map("product_id")
+  productName String?  @map("product_name")
+  price       Float?
+  ccCode      String?  @map("cc_code")
+  ccMessage   String?  @map("cc_message")
+  rawResponse String?  @map("raw_response")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([scheduleId])
+  @@index([flowId])
+  @@index([cardId])
+  @@index([success])
+  @@index([firedAt])
+  @@map("transactions")
 }

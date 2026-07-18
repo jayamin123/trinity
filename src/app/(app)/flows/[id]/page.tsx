@@ -1,180 +1,98 @@
-import { notFound } from "next/navigation";
-import { Box, Typography, Chip, Stack, Button } from "@mui/material";
-import { db } from "@/lib/db";
-import { parseFlowSettings, getFlowDayRollup, summarizeProductMix } from "@/lib/flows";
-import { countAvailableForFlow } from "@/lib/cards";
-import { formatBkk, nowBkk } from "@/lib/bkk";
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-dayjs.extend(utc);
-import FlowTabs from "./FlowTabs";
-import PlanTab from "./PlanTab";
-import ActivityTab from "./ActivityTab";
-import AddCardsDialog from "./AddCardsDialog";
-import EditFlowModal from "./EditFlowModal";
-import { pauseFlow, resumeFlow } from "./actions";
+"use client";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import { get } from "@/lib/api";
+import { StatusPill } from "@/components/StatusPill";
 
-const STATUS_COLOR: Record<string, "success" | "warning" | "default"> = {
-  active: "success", paused: "warning", completed: "default",
-};
+type Flow = { id: string; name: string; status: string; startDate: string; endDate: string; ccGatewayName: string | null; ccCampaignName: string | null; totalCards: number; products: { id: string; name: string | null; price: number; count: number }[] };
+type Day = { date: string; scheduled: number; done: number; pending: number; failed: number; rows: { id: string; cardName: string; panLast4: string; scheduledFor: string; status: string; productName: string | null; price: number; ccGatewayId: string | null; success: boolean | null }[] };
+type Tx = { id: string; firedAt: string; cardName: string; panLast4: string; productName: string | null; amountPaid: number | null; actualMid: string | null; plannedMid: string | null; success: boolean; ccMessage: string | null };
 
-export default async function FlowDetailPage({
-  params, searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
-}) {
-  const { id } = await params;
-  const { tab = "plan" } = await searchParams;
-  const activeTab = ["plan", "activity"].includes(tab) ? tab : "plan";
+export default function FlowDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const [flow, setFlow] = useState<Flow | null>(null);
+  const [tab, setTab] = useState<"schedule" | "logs">("schedule");
+  const [days, setDays] = useState<Day[] | null>(null);
+  const [logs, setLogs] = useState<Tx[] | null>(null);
+  const [openDay, setOpenDay] = useState<string | null>(null);
 
-  const flow = await db.flow.findUnique({
-    where: { id },
-    include: { account: true },
-  });
-  if (!flow) notFound();
-
-  const settings = parseFlowSettings(flow.flowSettings);
-
-  const [rollup, succeededCount, firedCount, scheduleRows, poolCount, lastScheduled, usedCount, pendingCount, processingCount, nextPending, lastFired] = await Promise.all([
-    getFlowDayRollup(id),
-    db.schedule.count({ where: { flowId: id, success: true } }),
-    db.schedule.count({ where: { flowId: id, status: "fired" } }),
-    activeTab === "activity"
-      ? db.schedule.findMany({
-          where: { flowId: id, status: "fired" },
-          orderBy: { firedAt: "desc" },
-          take: 300,
-          include: { card: { select: { panLast4: true, cardData: true } } },
-        })
-      : Promise.resolve([]),
-    countAvailableForFlow(id),
-    db.schedule.findFirst({
-      where: { flowId: id },
-      orderBy: { scheduledFor: "desc" },
-      select: { scheduledFor: true },
-    }),
-    db.schedule.count({ where: { flowId: id, OR: [{ status: "fired" }, { status: "processing" }] } }),
-    db.schedule.count({ where: { flowId: id, status: "pending" } }),
-    db.schedule.count({ where: { flowId: id, status: "processing" } }),
-    db.schedule.findFirst({
-      where: { flowId: id, status: "pending" },
-      orderBy: { scheduledFor: "asc" },
-      select: { scheduledFor: true },
-    }),
-    db.schedule.findFirst({
-      where: { flowId: id, status: "fired" },
-      orderBy: { firedAt: "desc" },
-      select: { firedAt: true },
-    }),
-  ]);
-  const isFresh = usedCount === 0;
-  const failedCount = firedCount - succeededCount;
-
-  // Default the AddCardsDialog window to start day-after-last-scheduled, span
-  // the same length the original flow used.
-  const lastDate = lastScheduled?.scheduledFor ? dayjs.utc(lastScheduled.scheduledFor).add(1, "day") : dayjs.utc(nowBkk()).add(1, "day");
-  const origSpanDays = Math.max(1, Math.ceil(
-    (new Date(settings.schedule_window.end_date).getTime() - new Date(settings.schedule_window.start_date).getTime()) / (1000 * 60 * 60 * 24),
-  ));
-  const addDefaultStart = lastDate.format("YYYY-MM-DD");
-  const addDefaultEnd = lastDate.add(origSpanDays - 1, "day").format("YYYY-MM-DD");
+  useEffect(() => { get<Flow>(`/api/flows/${id}`).then(setFlow).catch(() => {}); }, [id]);
+  useEffect(() => { if (tab === "schedule" && !days) get<Day[]>(`/api/flows/${id}/schedule`).then(setDays).catch(() => setDays([])); }, [tab, id, days]);
+  useEffect(() => { if (tab === "logs" && !logs) get<Tx[]>(`/api/flows/${id}/logs`).then(setLogs).catch(() => setLogs([])); }, [tab, id, logs]);
 
   return (
-    <Box>
-      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" sx={{ mb: 3 }}>
-        <Box>
-          <Stack direction="row" alignItems="center" spacing={1.5}>
-            <Typography variant="h4">{flow.name}</Typography>
-            <Chip label={settings.lifecycle.status} color={STATUS_COLOR[settings.lifecycle.status] ?? "default"} />
-            <EditFlowModal
-              flowId={id}
-              flowName={flow.name}
-              settings={settings}
-              isFresh={isFresh}
-              createdAt={flow.createdAt.toISOString()}
-              account={{ name: flow.account.name, apiUrl: flow.account.apiUrl }}
-              progress={{
-                total: settings.total_cards,
-                fired: firedCount,
-                succeeded: succeededCount,
-                failed: failedCount,
-                pending: pendingCount,
-                processing: processingCount,
-                nextPendingIso: nextPending?.scheduledFor.toISOString() ?? null,
-                lastFiredIso: lastFired?.firedAt?.toISOString() ?? null,
-              }}
-            />
-          </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {formatBkk(new Date(settings.schedule_window.start_date), "MMM D")} – {formatBkk(new Date(settings.schedule_window.end_date), "MMM D")}
-            {" · "}
-            {settings.total_cards} cards
-            {" · "}
-            {settings.cc_campaign.name} ({settings.cc_gateway.name})
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Product mix:{" "}
-            {summarizeProductMix(settings.cc_products)}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {firedCount}/{settings.total_cards} fired · {succeededCount} succeeded
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={1}>
-          {/* No Delete button — flows are permanent (fire history must be preserved). */}
-          {settings.lifecycle.status !== "paused" && (
-            <AddCardsDialog
-              flowId={id}
-              flowName={flow.name}
-              availableProducts={settings.cc_products}
-              poolCount={poolCount}
-              defaultStart={addDefaultStart}
-              defaultEnd={addDefaultEnd}
-              currentMix={summarizeProductMix(settings.cc_products)}
-              gatewayId={settings.cc_gateway.id}
-              campaignName={settings.cc_campaign.name}
-            />
-          )}
-          {settings.lifecycle.status === "active" && (
-            <form action={pauseFlow.bind(null, id)}>
-              <Button type="submit" variant="outlined">Pause</Button>
-            </form>
-          )}
-          {settings.lifecycle.status === "paused" && (
-            <form action={resumeFlow.bind(null, id)}>
-              <Button type="submit" variant="contained" color="success">Resume</Button>
-            </form>
-          )}
-        </Stack>
-      </Stack>
+    <>
+      <div className="topbar">
+        <div>
+          <h1>{flow?.name ?? "Flow"} {flow && <StatusPill status={flow.status} />}</h1>
+          <p>{flow ? `${flow.ccGatewayName?.split(" - ")[0] ?? "—"} · ${flow.ccCampaignName ?? ""} · ${flow.totalCards} cards` : "…"}</p>
+        </div>
+        <div className="spacer" /><Link className="btn" href="/flows">← Flows</Link>
+      </div>
+      <div className="content">
+        <div className="seg" style={{ marginBottom: 16 }}>
+          <button className={tab === "schedule" ? "on" : ""} onClick={() => setTab("schedule")}>Schedule</button>
+          <button className={tab === "logs" ? "on" : ""} onClick={() => setTab("logs")}>Logs</button>
+        </div>
 
-      <FlowTabs id={id} activeTab={activeTab} />
+        {tab === "schedule" && (!days ? <div className="loading">Loading…</div> : (
+          <div className="panel scroll">
+            <table className="tbl">
+              <thead><tr><th>Day (BKK)</th><th className="center">Scheduled</th><th className="center">Done</th><th className="center">Pending</th><th className="center">Failed</th><th /></tr></thead>
+              <tbody>
+                {days.map((d) => (
+                  <FragmentDay key={d.date} d={d} open={openDay === d.date} onToggle={() => setOpenDay(openDay === d.date ? null : d.date)} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
 
-      {activeTab === "plan" && (
-        <PlanTab
-          rollup={rollup}
-          availableProducts={settings.cc_products}
-        />
-      )}
-      {activeTab === "activity" && (
-        <ActivityTab
-          schedules={scheduleRows.map(s => ({
-            id: s.id,
-            firedAt: s.firedAt?.toISOString() ?? null,
-            scheduledFor: s.scheduledFor.toISOString(),
-            orderId: s.orderId,
-            success: s.success,
-            cardLast4: s.card.panLast4,
-            cardName: (() => {
-              const d = JSON.parse(s.card.cardData);
-              return `${d.cardholder?.first_name ?? ""} ${d.cardholder?.last_name ?? ""}`.trim();
-            })(),
-            firePlan: s.firePlan,
-            fireAttempts: s.fireAttempts,
-          }))}
-        />
-      )}
-    </Box>
+        {tab === "logs" && (!logs ? <div className="loading">Loading…</div> : (
+          <div className="panel scroll">
+            <table className="tbl">
+              <thead><tr><th>Time</th><th>Card</th><th>Product</th><th className="right">Amount</th><th>MID</th><th>Status</th></tr></thead>
+              <tbody>
+                {logs.map((t) => (
+                  <tr key={t.id}>
+                    <td className="mono" style={{ fontSize: 12 }}>{new Date(t.firedAt).toISOString().slice(0, 16).replace("T", " ")}</td>
+                    <td><b>{t.cardName}</b> <span className="faint mono">••{t.panLast4}</span></td>
+                    <td className="muted">{t.productName ?? "—"}</td>
+                    <td className="right mono">{t.amountPaid != null ? `$${t.amountPaid.toFixed(2)}` : "—"}</td>
+                    <td><span className="tag mono">MID {t.actualMid ?? t.plannedMid ?? "?"}</span></td>
+                    <td>{t.success ? <span className="pill ok"><span className="dot" />Approved</span> : <span className="pill no"><span className="dot" />Declined</span>}</td>
+                  </tr>
+                ))}
+                {logs.length === 0 && <tr><td colSpan={6} className="loading">No transactions yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function FragmentDay({ d, open, onToggle }: { d: Day; open: boolean; onToggle: () => void }) {
+  return (
+    <>
+      <tr className="clk" onClick={onToggle}>
+        <td className="mono">{d.date}</td>
+        <td className="center num">{d.scheduled}</td>
+        <td className="center num" style={{ color: "var(--good)" }}>{d.done}</td>
+        <td className="center num">{d.pending}</td>
+        <td className="center num" style={{ color: d.failed ? "var(--bad)" : "inherit" }}>{d.failed}</td>
+        <td className="right faint">{open ? "▾" : "▸"}</td>
+      </tr>
+      {open && d.rows.map((r) => (
+        <tr key={r.id} style={{ background: "var(--panel-2)" }}>
+          <td className="mono faint" style={{ fontSize: 11.5, paddingLeft: 26 }}>{new Date(r.scheduledFor).toISOString().slice(11, 16)}</td>
+          <td colSpan={2}><b>{r.cardName}</b> <span className="faint mono">••{r.panLast4}</span></td>
+          <td className="muted" style={{ fontSize: 12 }}>{r.productName} · ${r.price} · MID {r.ccGatewayId}</td>
+          <td colSpan={2}>{r.status === "done" ? (r.success === false ? <span className="pill no"><span className="dot" />failed</span> : <span className="pill ok"><span className="dot" />done</span>) : <span className="pill warn"><span className="dot" />{r.status}</span>}</td>
+        </tr>
+      ))}
+    </>
   );
 }

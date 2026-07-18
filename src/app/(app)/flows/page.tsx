@@ -1,101 +1,46 @@
-import { Box, Card, CardContent, Typography, Button, Stack, Chip, LinearProgress, Alert } from "@mui/material";
-import { db } from "@/lib/db";
-import { parseFlowSettings, summarizeProductMix } from "@/lib/flows";
-import { formatBkk } from "@/lib/bkk";
-import Link from "next/link";
+"use client";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { get } from "@/lib/api";
+import { StatusPill } from "@/components/StatusPill";
 
-const STATUS_COLOR: Record<string, "success" | "warning" | "default"> = {
-  active: "success", paused: "warning", completed: "default",
+type FlowRow = {
+  id: string; name: string; status: string; ccGatewayName: string | null; ccCampaignName: string | null;
+  total: number; pending: number; done: number; success: number; failed: number;
 };
 
-export default async function FlowsPage() {
-  const [account, flows] = await Promise.all([
-    db.account.findFirst(),
-    db.flow.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        _count: { select: { schedules: true } },
-      },
-    }),
-  ]);
-
-  const withCounts = await Promise.all(
-    flows.map(async f => ({
-      ...f,
-      done: await db.schedule.count({ where: { flowId: f.id, status: "fired" } }),
-      success: await db.schedule.count({ where: { flowId: f.id, success: true } }),
-    })),
-  );
+export default function FlowsPage() {
+  const [flows, setFlows] = useState<FlowRow[] | null>(null);
+  const router = useRouter();
+  useEffect(() => { get<FlowRow[]>("/api/flows").then(setFlows).catch(() => setFlows([])); }, []);
 
   return (
-    <Box>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
-        <Typography variant="h4">Flows</Typography>
-        <Button
-          href={account ? "/flows/new" : "/settings"}
-          variant="contained"
-          size="large"
-          disabled={!account}
-        >
-          + New flow
-        </Button>
-      </Stack>
-
-      {!account && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          Add CheckoutChamp credentials in <Link href="/settings">Settings</Link> before creating a flow.
-        </Alert>
-      )}
-
-      {withCounts.length === 0 ? (
-        <Card><CardContent>
-          <Typography color="text.secondary">No flows yet. Upload cards and create your first flow.</Typography>
-        </CardContent></Card>
-      ) : (
-        <Stack spacing={2}>
-          {withCounts.map(f => {
-            const settings = parseFlowSettings(f.flowSettings);
-            const pct = settings.total_cards > 0 ? Math.round((f.done / settings.total_cards) * 100) : 0;
-            const rate = f.done > 0 ? Math.round((f.success / f.done) * 100) : 0;
-            return (
-              <Card key={f.id} sx={{ cursor: "pointer", "&:hover": { boxShadow: 4 } }}>
-                <CardContent>
-                  <Stack direction="row" alignItems="flex-start" justifyContent="space-between">
-                    <Box sx={{ flexGrow: 1 }}>
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                        <Link href={`/flows/${f.id}`} style={{ textDecoration: "none" }}>
-                          <Typography variant="h6" sx={{ color: "primary.main", "&:hover": { textDecoration: "underline" } }}>
-                            {f.name}
-                          </Typography>
-                        </Link>
-                        <Chip label={settings.lifecycle.status} size="small" color={STATUS_COLOR[settings.lifecycle.status] ?? "default"} />
-                      </Stack>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        {formatBkk(new Date(settings.schedule_window.start_date), "MMM D")} – {formatBkk(new Date(settings.schedule_window.end_date), "MMM D")}
-                        {" · "}
-                        {settings.total_cards} cards
-                        {" · "}
-                        {settings.cc_campaign.name} (MID {settings.cc_gateway.id})
-                        {" · "}
-                        {summarizeProductMix(settings.cc_products)}
-                      </Typography>
-                      <Box sx={{ mt: 2 }}>
-                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 0.5 }}>
-                          <Typography variant="body2"><b>{f.done}</b> / {settings.total_cards} fired</Typography>
-                          <Typography variant="body2" color="success.main"><b>{f.success}</b> succeeded</Typography>
-                          {f.done > 0 && <Typography variant="body2" color="text.secondary">{rate}% success rate</Typography>}
-                        </Stack>
-                        <LinearProgress variant="determinate" value={pct} sx={{ height: 8, borderRadius: 1 }} />
-                      </Box>
-                    </Box>
-                    <Button href={`/flows/${f.id}`} size="small" sx={{ ml: 2 }}>View</Button>
-                  </Stack>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </Stack>
-      )}
-    </Box>
+    <>
+      <div className="topbar"><div><h1>Flows</h1><p>Every campaign and its progress</p></div></div>
+      <div className="content">
+        {!flows ? <div className="loading">Loading…</div> : (
+          <div className="panel scroll">
+            <table className="tbl">
+              <thead><tr><th>Flow</th><th>Gateway / Campaign</th><th className="center">Total</th><th className="center">Pending</th><th className="center">Done</th><th className="center">Success</th><th className="center">Failed</th><th>Status</th></tr></thead>
+              <tbody>
+                {flows.map((f) => (
+                  <tr key={f.id} className="clk" onClick={() => router.push(`/flows/${f.id}`)}>
+                    <td><b>{f.name}</b></td>
+                    <td className="muted">{f.ccGatewayName?.split(" - ")[0] ?? "—"}{f.ccCampaignName ? ` · ${f.ccCampaignName}` : ""}</td>
+                    <td className="center num">{f.total}</td>
+                    <td className="center num">{f.pending}</td>
+                    <td className="center num">{f.done}</td>
+                    <td className="center num" style={{ color: "var(--good)" }}>{f.success}</td>
+                    <td className="center num" style={{ color: f.failed ? "var(--bad)" : "inherit" }}>{f.failed}</td>
+                    <td><StatusPill status={f.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
+

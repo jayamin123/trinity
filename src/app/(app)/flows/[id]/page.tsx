@@ -153,7 +153,7 @@ export default function FlowDetailPage() {
         ))}
       </div>
 
-      {addOpen && flow && <AddCardsDialog flowId={id} onClose={() => setAddOpen(false)} onDone={() => { setAddOpen(false); loadDays(); loadFlow(); }} />}
+      {addOpen && flow && <AddCardsDialog flowId={id} products={flow.products} onClose={() => setAddOpen(false)} onDone={() => { setAddOpen(false); loadDays(); loadFlow(); }} />}
       {editOpen && flow && <EditFlowModal flow={flow} onClose={() => setEditOpen(false)} onSaved={() => { setEditOpen(false); loadFlow(); }} />}
       {detail && <AttemptsModal scheduleId={detail.scheduleId} title={detail.cardName} sub={`••${detail.panLast4}`} onClose={() => setDetail(null)} onDone={() => { loadDays(); loadLogs(); loadFlow(); }} />}
     </>
@@ -212,8 +212,14 @@ function EditFlowModal({ flow, onClose, onSaved }: { flow: Flow; onClose: () => 
   );
 }
 
-function AddCardsDialog({ flowId, onClose, onDone }: { flowId: string; onClose: () => void; onDone: () => void }) {
-  const [count, setCount] = useState(10);
+function AddCardsDialog({ flowId, products, onClose, onDone }: { flowId: string; products: { id: string; productId: string; name: string | null; price: number }[]; onClose: () => void; onDone: () => void }) {
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [field, setField] = useState<"product" | "price">("product");
+  const [op, setOp] = useState<"above" | "below" | "between">("above");
+  const [a, setA] = useState(""); const [b, setB] = useState("");
+  const [bulkN, setBulkN] = useState(1);
+  const [shape, setShape] = useState("even");
   const [start, setStart] = useState(plusDays(60));
   const [end, setEnd] = useState(plusDays(67));
   const [sources, setSources] = useState<string[]>([]);
@@ -221,28 +227,81 @@ function AddCardsDialog({ flowId, onClose, onDone }: { flowId: string; onClose: 
   const [avail, setAvail] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  useEffect(() => { get<string[]>("/api/cards/sources").then((s) => { setSources(s); const dummy = s.find((x) => /dummy/i.test(x)); if (dummy) setSource(dummy); }).catch(() => {}); }, []);
-  useEffect(() => { post<{ available: number }>(`/api/flows/${flowId}/preview-cards`, { count, source: source || undefined }).then((r) => setAvail(r.available)).catch(() => setAvail(null)); }, [flowId, count, source]);
+
+  useEffect(() => { get<string[]>("/api/cards/sources").then((s) => { setSources(s); const d = s.find((x) => /dummy/i.test(x)); if (d) setSource(d); }).catch(() => {}); }, []);
+  useEffect(() => { post<{ available: number }>(`/api/flows/${flowId}/preview-cards`, { source: source || undefined }).then((r) => setAvail(r.available)).catch(() => setAvail(null)); }, [flowId, source]);
+
+  const numOf = (name: string | null) => { const m = (name ?? "").match(/(\d+)(?!.*\d)/); return m ? Number(m[1]) : null; };
+  const shown = products.filter((p) => {
+    if (a === "") return true;
+    const val = field === "price" ? p.price : numOf(p.name);
+    if (val == null) return false;
+    const na = Number(a), nb = Number(b);
+    if (op === "above") return val >= na;
+    if (op === "below") return val <= na;
+    return val >= na && val <= nb;
+  });
+  const total = Object.values(counts).reduce((s, n) => s + (n || 0), 0);
+  const targets = () => shown.filter((p) => checked.has(p.productId)).map((p) => p.productId);
+
+  function setCount(pid: string, n: number) { setCounts((c) => ({ ...c, [pid]: Math.max(0, n) })); }
+  function toggle(pid: string) { setChecked((s) => { const n = new Set(s); n.has(pid) ? n.delete(pid) : n.add(pid); return n; }); }
+  function bulkSet() { const t = targets(); setCounts((c) => { const n = { ...c }; t.forEach((pid) => (n[pid] = bulkN)); return n; }); }
+  function bulkDistribute() { const t = targets(); if (!t.length) return; const per = Array(t.length).fill(0); for (let i = 0; i < bulkN; i++) per[i % t.length]++; setCounts((c) => { const n = { ...c }; t.forEach((pid, i) => (n[pid] = per[i])); return n; }); }
+  function bulkClear() { const t = targets(); setCounts((c) => { const n = { ...c }; t.forEach((pid) => (n[pid] = 0)); return n; }); }
+
   async function add() {
+    const items = products.filter((p) => (counts[p.productId] || 0) > 0).map((p) => ({ productId: p.productId, name: p.name ?? "", price: p.price, count: counts[p.productId] }));
+    if (!items.length) { setMsg("set a count on at least one product"); return; }
     setBusy(true); setMsg("");
-    try { const r = await post<{ added: number }>(`/api/flows/${flowId}/add-cards`, { count, startDate: start, endDate: end, source: source || undefined }); setMsg(`Added ${r.added} cards`); setTimeout(onDone, 700); }
+    try { const r = await post<{ added: number }>(`/api/flows/${flowId}/add-cards`, { items, startDate: start, endDate: end, shape, source: source || undefined }); setMsg(`Scheduled ${r.added} cards`); setTimeout(onDone, 800); }
     catch (e) { setMsg(e instanceof Error ? e.message : "failed"); setBusy(false); }
   }
+
   return (
     <div className="scrim" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
-        <div className="mh"><div style={{ flex: 1 }}><div style={{ fontWeight: 660, fontSize: 17 }}>Add cards</div><div className="faint" style={{ fontSize: 12 }}>Schedule cards into this flow (won&apos;t fire — no cron)</div></div><button className="mclose" onClick={onClose}>✕</button></div>
+      <div className="modal" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()}>
+        <div className="mh"><div style={{ flex: 1 }}><div style={{ fontWeight: 660, fontSize: 17 }}>Add cards</div><div className="faint" style={{ fontSize: 12 }}>Pick products, set counts, roll across the window (won&apos;t fire — no cron)</div></div><button className="mclose" onClick={onClose}>✕</button></div>
         <div className="mb" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <label><div className="k" style={{ fontSize: 11, marginBottom: 4 }}>Source</div><select className="input" value={source} onChange={(e) => setSource(e.target.value)}><option value="">Any available</option>{sources.map((s) => <option key={s} value={s}>{s.length > 34 ? "…" + s.slice(-32) : s}</option>)}</select></label>
-          <label><div className="k" style={{ fontSize: 11, marginBottom: 4 }}>How many</div><input className="input" type="number" min={1} value={count} onChange={(e) => setCount(Number(e.target.value))} /></label>
-          <div style={{ display: "flex", gap: 10 }}>
-            <label style={{ flex: 1 }}><div className="k" style={{ fontSize: 11, marginBottom: 4 }}>Start</div><input className="input" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
-            <label style={{ flex: 1 }}><div className="k" style={{ fontSize: 11, marginBottom: 4 }}>End</div><input className="input" type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <label className="chip">Source: <select value={source} onChange={(e) => setSource(e.target.value)}><option value="">Any</option>{sources.map((s) => <option key={s} value={s}>{s.length > 22 ? "…" + s.slice(-20) : s}</option>)}</select></label>
+            <label className="chip">Roll: <select value={shape} onChange={(e) => setShape(e.target.value)}><option value="even">Even</option><option value="increasing">Increasing</option><option value="decreasing">Decreasing</option><option value="normal">Bell curve</option><option value="inverse">Edges</option></select></label>
+            <input className="input" type="date" style={{ width: 138 }} value={start} onChange={(e) => setStart(e.target.value)} />
+            <input className="input" type="date" style={{ width: 138 }} value={end} onChange={(e) => setEnd(e.target.value)} />
           </div>
-          <div className="faint" style={{ fontSize: 12.5 }}>{avail != null ? `${avail} cards available to schedule` : "…"}</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span className="faint" style={{ fontSize: 12 }}>Filter</span>
+            <select className="input" style={{ width: "auto" }} value={field} onChange={(e) => setField(e.target.value as "product" | "price")}><option value="product">Product #</option><option value="price">Price</option></select>
+            <select className="input" style={{ width: "auto" }} value={op} onChange={(e) => setOp(e.target.value as "above" | "below" | "between")}><option value="above">≥</option><option value="below">≤</option><option value="between">between</option></select>
+            <input className="input" style={{ width: 66 }} value={a} onChange={(e) => setA(e.target.value)} placeholder="value" />
+            {op === "between" && <input className="input" style={{ width: 66 }} value={b} onChange={(e) => setB(e.target.value)} placeholder="and" />}
+            <div className="spacer" />
+            <span className="faint" style={{ fontSize: 12 }}>Checked {targets().length}:</span>
+            <input className="input" style={{ width: 56 }} type="number" min={0} value={bulkN} onChange={(e) => setBulkN(Number(e.target.value))} />
+            <button className="btn" style={{ padding: "5px 9px", fontSize: 12 }} onClick={bulkSet}>Set</button>
+            <button className="btn" style={{ padding: "5px 9px", fontSize: 12 }} onClick={bulkDistribute}>Distribute</button>
+            <button className="btn" style={{ padding: "5px 9px", fontSize: 12 }} onClick={bulkClear}>Clear</button>
+          </div>
+          <div className="panel scroll" style={{ maxHeight: 260 }}>
+            <table className="tbl">
+              <thead><tr><th style={{ width: 30 }}><input type="checkbox" checked={shown.length > 0 && shown.every((p) => checked.has(p.productId))} onChange={(e) => setChecked(e.target.checked ? new Set(shown.map((p) => p.productId)) : new Set())} /></th><th>Product</th><th className="right">Price</th><th className="right" style={{ width: 90 }}>Count</th></tr></thead>
+              <tbody>
+                {shown.map((p) => (
+                  <tr key={p.id}>
+                    <td><input type="checkbox" checked={checked.has(p.productId)} onChange={() => toggle(p.productId)} /></td>
+                    <td>{p.name} <span className="faint mono">#{p.productId}</span></td>
+                    <td className="right mono">${p.price}</td>
+                    <td className="right"><input className="input" style={{ width: 70, padding: "5px 8px" }} type="number" min={0} value={counts[p.productId] || 0} onChange={(e) => setCount(p.productId, Number(e.target.value))} /></td>
+                  </tr>
+                ))}
+                {shown.length === 0 && <tr><td colSpan={4} className="loading">No products match.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <div className="faint" style={{ fontSize: 12.5 }}>Total to schedule: <b style={{ color: "var(--text)" }}>{total}</b> · {avail != null ? `${avail} available from source` : "…"}</div>
           {msg && <div className="pill mut">{msg}</div>}
         </div>
-        <div className="m-foot"><div className="spacer" /><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || !avail} onClick={add}>{busy ? "Adding…" : `Add ${Math.min(count, avail ?? 0)} cards`}</button></div>
+        <div className="m-foot"><div className="spacer" /><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || total === 0} onClick={add}>{busy ? "Scheduling…" : `Schedule ${Math.min(total, avail ?? total)} cards`}</button></div>
       </div>
     </div>
   );

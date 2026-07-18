@@ -27,8 +27,13 @@ export async function createFlow(input: NewFlowInput) {
     await db.flowProduct.create({ data: { flowId: flow.id, productId: p.productId, name: p.name, price: Number(p.price), count: 0 } });
   }
   let added = 0;
-  if (input.count > 0) {
-    const r = await addCardsToFlow(flow.id, input.count, input.startDate, input.endDate, input.source || undefined);
+  if (input.count > 0 && (input.products?.length ?? 0) > 0) {
+    // split the requested count evenly across the products
+    const prods = input.products;
+    const per = Array(prods.length).fill(0);
+    for (let i = 0; i < input.count; i++) per[i % prods.length]++;
+    const items = prods.map((p, i) => ({ productId: p.productId, name: p.name, price: Number(p.price), count: per[i] }));
+    const r = await addCardsToFlow(flow.id, items, input.startDate, input.endDate, "even", input.source || undefined);
     added = r.added;
   }
   return { id: flow.id, added };

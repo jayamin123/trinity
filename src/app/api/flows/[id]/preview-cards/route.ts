@@ -7,6 +7,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const g = await guard();
   if (g) return g;
   const { id } = await params;
-  const { count, source } = (await req.json().catch(() => ({}))) as { count?: number; source?: string };
-  return ok(await previewAddCards(id, Number(count) || 0, source || undefined));
+  const { source } = (await req.json().catch(() => ({}))) as { source?: string };
+  return ok(await previewAddCards(id, source || undefined));
 }

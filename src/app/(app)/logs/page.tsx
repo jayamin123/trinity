@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { get } from "@/lib/api";
+import { downloadCsv } from "@/lib/csv-export";
 
 export type TxRow = {
   id: string; scheduleId: string; firedAt: string; cardName: string; panLast4: string;
@@ -83,6 +84,7 @@ export default function LogsPage() {
           <label className="chip">MID: <select value={mid} onChange={(e) => setMid(e.target.value)}><option value="all">All</option>{mids.map((m) => <option key={m} value={m}>MID {m}</option>)}</select></label>
           <label className="chip"><input type="checkbox" checked={cascade} onChange={(e) => setCascade(e.target.checked)} style={{ accentColor: "var(--accent)" }} /> Cascaded</label>
           <input className="input" style={{ width: 150 }} placeholder="CC message…" value={msg} onChange={(e) => setMsg(e.target.value)} />
+          <button className="chip" onClick={() => downloadCsv("logs.csv", shown.map((r) => ({ time: r.firedAt, card: r.cardName, last4: r.panLast4, flow: r.flowName, product: r.productName, amount: r.amountPaid, mid: r.actualMid ?? r.plannedMid, cascade: r.cascadeUsed, status: r.success ? "approved" : "declined", order: r.orderId, message: r.ccMessage })))}>⬇ Export CSV</button>
           <div className="spacer" /><span className="faint" style={{ fontSize: 12 }}>{shown.length} of {rows?.length ?? 0}</span>
         </div>
 

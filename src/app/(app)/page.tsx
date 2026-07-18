@@ -8,11 +8,14 @@ import type { TxRow } from "./logs/page";
 type Stats = {
   cards: number; activeFlows: number; flows: number; pending: number;
   totalCharges: number; approvalRate: number; volume: number; declined: number; series: number[];
+  byProduct: { name: string; charges: number; volume: number }[];
+  byFlow: { name: string; charges: number; ok: number }[];
 };
 
 export default function DashboardPage() {
   const [s, setS] = useState<Stats | null>(null);
   const [recent, setRecent] = useState<TxRow[]>([]);
+  const [groupBy, setGroupBy] = useState<"product" | "flow">("flow");
   useEffect(() => {
     get<Stats>("/api/dashboard").then(setS).catch(() => {});
     get<TxRow[]>("/api/logs?limit=8").then(setRecent).catch(() => {});
@@ -50,6 +53,18 @@ export default function DashboardPage() {
               ))}
               {recent.length === 0 && <div className="faint" style={{ padding: 12 }}>No activity.</div>}
             </div></div>
+
+            <h2>Breakdown <span className="seg" style={{ marginLeft: 8 }}><button className={groupBy === "flow" ? "on" : ""} onClick={() => setGroupBy("flow")}>By flow</button><button className={groupBy === "product" ? "on" : ""} onClick={() => setGroupBy("product")}>By product</button></span></h2>
+            <div className="panel scroll">
+              <table className="tbl">
+                <thead><tr><th>{groupBy === "flow" ? "Flow" : "Product"}</th><th className="right">Charges</th><th className="right">{groupBy === "flow" ? "Approved" : "Volume"}</th></tr></thead>
+                <tbody>
+                  {groupBy === "flow"
+                    ? s.byFlow.map((r) => <tr key={r.name}><td><b>{r.name}</b></td><td className="right num">{r.charges}</td><td className="right num" style={{ color: "var(--good)" }}>{r.ok}</td></tr>)
+                    : s.byProduct.map((r) => <tr key={r.name}><td><b>{r.name}</b></td><td className="right num">{r.charges}</td><td className="right num">${r.volume.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td></tr>)}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </div>

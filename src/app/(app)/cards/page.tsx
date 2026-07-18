@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { get, post } from "@/lib/api";
+import { downloadCsv } from "@/lib/csv-export";
 
 type Bal = { isUnlimited: boolean; start: number | null; remaining: number | null; label: string; usable: boolean; overBalance: boolean };
 type CardRow = { id: string; name: string; panLast4: string; email: string | null; sourceFile: string | null; balance: Bal; pending: number; done: number; flowIds: string[]; verdict: string | null; cascade: boolean };
@@ -47,6 +48,7 @@ export default function CardsPage() {
           <label className="chip">Source: <select value={source} onChange={(e) => setSource(e.target.value)}><option value="all">All</option>{sources.map((s) => <option key={s} value={s}>{s.length > 30 ? "…" + s.slice(-28) : s}</option>)}</select></label>
           {showFlow && <label className="chip">Flow: <select value={flow} onChange={(e) => setFlow(e.target.value)}><option value="all">All</option>{flows.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
           {showVerdict && <label className="chip">Verdict: <select value={verdict} onChange={(e) => setVerdict(e.target.value)}><option value="all">All</option><option value="approved">Approved</option><option value="declined">Declined</option><option value="mixed">Mixed</option><option value="cascade">Cascaded</option></select></label>}
+          <button className="chip" onClick={() => downloadCsv("cards.csv", rows.map((c) => ({ name: c.name, card: "••" + c.panLast4, email: c.email, balance: c.balance.label, source: c.sourceFile, pending: c.pending, fired: c.done, verdict: c.verdict })))}>⬇ Export CSV</button>
           <div className="spacer" /><span className="faint" style={{ fontSize: 12 }}>{rows.length.toLocaleString()} shown</span>
         </div>
         {!cards ? <div className="loading">Loading…</div> : (

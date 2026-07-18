@@ -2,6 +2,23 @@
 
 Branch: `rebuild/ledger-v2`. Overnight autonomous build. **Live system untouched.**
 
+## ✅ LIVE NOW — https://flows2.accotta.me  (login: admin@accotta.com / asdf1234)
+The new-architecture app is **built, deployed, and end-to-end tested** on the migrated ledger DB.
+Worker `trinity-flows-2`, **no cron, `FIRING_ENABLED=0` → cannot fire.** Verified via Playwright:
+login works, every page loads real ledger data, every API endpoint returns 200, no console errors.
+
+**Working features (read side + core):**
+- Login (clean, hits `/api/auth/login`) · Dashboard KPIs (from the ledger) · Cards (2,500, filters,
+  detail modal, reveal — reveal 503s gracefully without ENCRYPTION_KEY) · Flows list · Flow detail
+  (Schedule tab day-rollup + **Logs tab**) · **Logs** (the premium redesign, reads the transactions
+  ledger — a declined attempt shows alongside approvals, nothing hidden on retry).
+- **Architecture achieved:** clean 3-layer (`route → src/server service → Prisma`), thin `src/lib/api.ts`
+  client, UI components only call the defined `/api/*` endpoints, plain-CSS UI (no MUI), no over-abstraction.
+
+**Not yet built (write side — next):** New Flow builder, Add Cards, edit/delete/retry schedule,
+Settings + CheckoutChamp pickers, card ingest. The firing path stays disabled regardless.
+
+
 ## 🔒 Safety invariants (never violate)
 - New deployment worker name = **`trinity-flows-2`** (never `trinity-flows`) → cannot overwrite live.
 - `wrangler.flows2.jsonc` has **NO `triggers.crons`** → the new worker cannot fire.

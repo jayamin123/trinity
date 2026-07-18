@@ -8,6 +8,7 @@ const NAV = [
   { href: "/cards", em: "🎴", label: "Cards" },
   { href: "/flows", em: "🔀", label: "Flows" },
   { href: "/logs", em: "🧾", label: "Logs" },
+  { href: "/settings", em: "⚙️", label: "Settings" },
 ];
 
 export default function Shell() {

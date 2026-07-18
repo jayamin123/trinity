@@ -110,6 +110,14 @@ table.tbl tr.clk:hover td{background:var(--panel-hover)}
 .modal .mb{padding:16px 20px;overflow-y:auto}
 .mclose{margin-left:auto;width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);color:var(--text-muted)}
 
+/* progress + page head */
+.bar{height:7px;border-radius:999px;background:var(--panel-2);border:1px solid var(--border);overflow:hidden;min-width:80px}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#b3b0ff)}
+.pagehead{display:flex;align-items:flex-start;gap:14px;margin-bottom:6px}
+.pagehead .big{font-size:26px;line-height:1}
+.minirow{display:flex;align-items:center;gap:11px;padding:9px 2px;border-bottom:1px solid var(--border);font-size:13px}
+.minirow:last-child{border-bottom:0}
+
 /* --- premium logs additions --- */
 .kpi{position:relative;overflow:hidden}
 .kpi .spark{position:absolute;right:12px;bottom:12px;width:90px;height:32px;opacity:.9}

@@ -32,27 +32,23 @@ export default function CardsPage() {
       <div className="content">
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14, alignItems: "center" }}>
           <div className="seg">{TABS.map(([v, l]) => <button key={v} className={tab === v ? "on" : ""} onClick={() => setTab(v)}>{l}</button>)}</div>
-          <select className="input" style={{ width: "auto" }} value={bal} onChange={(e) => setBal(e.target.value)}>
-            <option value="all">Balance: All</option><option value="unlim">Unlimited</option><option value="has">Has a balance</option>
-          </select>
-          <select className="input" style={{ width: "auto", maxWidth: 260 }} value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="all">Source: All</option>{sources.map((s) => <option key={s} value={s}>{s.length > 34 ? "…" + s.slice(-32) : s}</option>)}
-          </select>
+          <label className="chip">Balance: <select value={bal} onChange={(e) => setBal(e.target.value)}><option value="all">All</option><option value="unlim">Unlimited</option><option value="has">Has a balance</option></select></label>
+          <label className="chip">Source: <select value={source} onChange={(e) => setSource(e.target.value)}><option value="all">All</option>{sources.map((s) => <option key={s} value={s}>{s.length > 30 ? "…" + s.slice(-28) : s}</option>)}</select></label>
           <div className="spacer" /><span className="faint" style={{ fontSize: 12 }}>{rows.length.toLocaleString()} shown</span>
         </div>
         {!cards ? <div className="loading">Loading…</div> : (
           <div className="panel scroll">
             <table className="tbl">
-              <thead><tr><th>Name</th><th>Card</th><th>Email</th><th>Balance</th><th>Source</th><th className="center">Sched.</th></tr></thead>
+              <thead><tr><th>Name</th><th>Card</th><th>Email</th><th>Balance</th><th>Source</th><th className="center">Scheduled</th></tr></thead>
               <tbody>
                 {rows.slice(0, 500).map((c) => (
                   <tr key={c.id} className="clk" onClick={() => setOpenId(c.id)}>
-                    <td><b>{c.name}</b></td>
-                    <td className="mono">••{c.panLast4}</td>
+                    <td><div className="cardcell"><span className="cardglyph">CARD</span><div style={{ minWidth: 0 }}><div className="nm">{c.name}</div><div className="pan mono">••{c.panLast4}</div></div></div></td>
+                    <td className="mono faint">••{c.panLast4}</td>
                     <td className="muted">{c.email ?? "—"}</td>
                     <td><BalanceCell b={c.balance} /></td>
-                    <td className="faint" style={{ fontSize: 11.5 }}>{c.sourceFile ? (c.sourceFile.length > 24 ? "…" + c.sourceFile.slice(-22) : c.sourceFile) : "—"}</td>
-                    <td className="center">{c.pending > 0 && <span className="pill warn"><span className="dot" />{c.pending}p</span>} {c.done > 0 && <span className="pill ok"><span className="dot" />{c.done}✓</span>}</td>
+                    <td className="faint" style={{ fontSize: 11.5 }}>{c.sourceFile ? (c.sourceFile.length > 22 ? "…" + c.sourceFile.slice(-20) : c.sourceFile) : "—"}</td>
+                    <td className="center nowrap">{c.pending > 0 && <span className="pill warn"><span className="dot" />{c.pending}</span>} {c.done > 0 && <span className="pill ok"><span className="dot" />{c.done}</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -76,7 +72,7 @@ type CardDetail = { name: string; panLast4: string; expMonth: string; expYear: s
 
 function CardModal({ id, onClose }: { id: string; onClose: () => void }) {
   const [c, setC] = useState<CardDetail | null>(null);
-  const [secret, setSecret] = useState<string>("");
+  const [secret, setSecret] = useState("");
   useEffect(() => { get<CardDetail>(`/api/cards/${id}`).then(setC).catch(() => onClose()); }, [id, onClose]);
   async function reveal() {
     try { const s = await post<{ pan: string; cvv: string }>(`/api/cards/${id}/reveal`); setSecret(`${s.pan} · CVV ${s.cvv}`); }
@@ -88,19 +84,28 @@ function CardModal({ id, onClose }: { id: string; onClose: () => void }) {
         {!c ? <div className="loading">Loading…</div> : (
           <>
             <div className="mh">
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 660, fontSize: 17 }}>{c.name}</div>
+              <span className="cardglyph" style={{ width: 42, height: 28, marginTop: 2 }}>CARD</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 660, fontSize: 18, letterSpacing: "-.02em" }}>{c.name}</div>
                 <div className="muted" style={{ fontSize: 12.5 }}><span className="mono">••{c.panLast4}</span> · exp {c.expMonth}/{c.expYear} · {c.email ?? "—"}</div>
               </div>
               <button className="mclose" onClick={onClose}>✕</button>
             </div>
+            <div className="m-meta">
+              <div><div className="k">Balance</div><div className="v" style={{ fontSize: 13 }}><BalanceCell b={c.balance} /></div></div>
+              <div><div className="k">Schedules</div><div className="v num">{c.schedules.length}</div></div>
+              <div><div className="k">Transactions</div><div className="v num">{c.transactions.length}</div></div>
+            </div>
             <div className="mb">
-              <div style={{ marginBottom: 12 }}><BalanceCell b={c.balance} /> &nbsp; <button className="btn" style={{ padding: "4px 10px", fontSize: 12 }} onClick={reveal}>Reveal card</button> {secret && <span className="mono" style={{ fontSize: 12, marginLeft: 8 }}>{secret}</span>}</div>
-              <div className="muted" style={{ fontSize: 12.5, marginBottom: 14 }}>{c.address}</div>
-              <div className="ph" style={{ borderRadius: 8, marginBottom: 8 }}>Schedules ({c.schedules.length})</div>
-              {c.schedules.map((s) => <div key={s.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "5px 2px", borderBottom: "1px solid var(--border)" }}><span className="mono">{new Date(s.scheduledFor).toISOString().slice(0, 16).replace("T", " ")}</span><span>{s.productName} · ${s.price}</span><span className="pill mut">{s.status}</span></div>)}
-              <div className="ph" style={{ borderRadius: 8, margin: "12px 0 8px" }}>Transactions ({c.transactions.length})</div>
-              {c.transactions.map((t) => <div key={t.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "5px 2px", borderBottom: "1px solid var(--border)" }}><span className="mono">{new Date(t.firedAt).toISOString().slice(0, 16).replace("T", " ")}</span><span className="muted">{t.ccMessage}</span><span className={`pill ${t.success ? "ok" : "no"}`}><span className="dot" />{t.success ? "ok" : "fail"}</span></div>)}
+              <div style={{ marginBottom: 14 }}><button className="btn" style={{ padding: "6px 12px", fontSize: 12.5 }} onClick={reveal}>Reveal card number</button> {secret && <span className="mono" style={{ fontSize: 12, marginLeft: 8 }}>{secret}</span>}<div className="muted" style={{ fontSize: 12, marginTop: 8 }}>{c.address}</div></div>
+              {c.schedules.length > 0 && <>
+                <div style={{ fontSize: 11.5, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-faint)", fontWeight: 650, margin: "6px 0 6px" }}>Schedules</div>
+                {c.schedules.map((s) => <div key={s.id} className="minirow"><span className="mono faint" style={{ fontSize: 12, minWidth: 130 }}>{new Date(s.scheduledFor).toISOString().slice(0, 16).replace("T", " ")}</span><span style={{ flex: 1 }}>{s.productName} · ${s.price}</span><span className="pill mut">{s.status}</span></div>)}
+              </>}
+              {c.transactions.length > 0 && <>
+                <div style={{ fontSize: 11.5, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--text-faint)", fontWeight: 650, margin: "14px 0 6px" }}>Transactions</div>
+                {c.transactions.map((t) => <div key={t.id} className="minirow"><span className="mono faint" style={{ fontSize: 12, minWidth: 130 }}>{new Date(t.firedAt).toISOString().slice(0, 16).replace("T", " ")}</span><span className="muted" style={{ flex: 1 }}>{t.ccMessage}</span><span className={`pill ${t.success ? "ok" : "no"}`}><span className="dot" />{t.success ? "ok" : "fail"}</span></div>)}
+              </>}
             </div>
           </>
         )}

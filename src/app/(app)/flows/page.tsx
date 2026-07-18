@@ -19,28 +19,32 @@ export default function FlowsPage() {
       <div className="topbar"><div><h1>Flows</h1><p>Every campaign and its progress</p></div></div>
       <div className="content">
         {!flows ? <div className="loading">Loading…</div> : (
-          <div className="panel scroll">
-            <table className="tbl">
-              <thead><tr><th>Flow</th><th>Gateway / Campaign</th><th className="center">Total</th><th className="center">Pending</th><th className="center">Done</th><th className="center">Success</th><th className="center">Failed</th><th>Status</th></tr></thead>
-              <tbody>
-                {flows.map((f) => (
-                  <tr key={f.id} className="clk" onClick={() => router.push(`/flows/${f.id}`)}>
-                    <td><b>{f.name}</b></td>
-                    <td className="muted">{f.ccGatewayName?.split(" - ")[0] ?? "—"}{f.ccCampaignName ? ` · ${f.ccCampaignName}` : ""}</td>
-                    <td className="center num">{f.total}</td>
-                    <td className="center num">{f.pending}</td>
-                    <td className="center num">{f.done}</td>
-                    <td className="center num" style={{ color: "var(--good)" }}>{f.success}</td>
-                    <td className="center num" style={{ color: f.failed ? "var(--bad)" : "inherit" }}>{f.failed}</td>
-                    <td><StatusPill status={f.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="grid g2">
+            {flows.map((f) => {
+              const pct = f.total ? Math.round((f.done / f.total) * 100) : 0;
+              return (
+                <div key={f.id} className="box clk" onClick={() => router.push(`/flows/${f.id}`)}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ fontWeight: 650, fontSize: 16, letterSpacing: "-.01em", flex: 1 }}>{f.name}</div>
+                    <StatusPill status={f.status} />
+                  </div>
+                  <div className="muted" style={{ fontSize: 12.5, marginTop: 4 }}>{f.ccGatewayName?.split(" - ")[0] ?? "—"}{f.ccCampaignName ? ` · ${f.ccCampaignName}` : ""}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14 }}>
+                    <div className="bar" style={{ flex: 1 }}><i style={{ width: `${pct}%` }} /></div>
+                    <span className="num faint" style={{ fontSize: 12 }}>{pct}%</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 16, marginTop: 12, fontSize: 12.5 }}>
+                    <span className="muted">Total <b className="num" style={{ color: "var(--text)" }}>{f.total}</b></span>
+                    <span className="muted">Pending <b className="num" style={{ color: "var(--warn)" }}>{f.pending}</b></span>
+                    <span className="muted">Done <b className="num" style={{ color: "var(--good)" }}>{f.success}</b></span>
+                    {f.failed > 0 && <span className="muted">Failed <b className="num" style={{ color: "var(--bad)" }}>{f.failed}</b></span>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
     </>
   );
 }
-

@@ -78,13 +78,19 @@ export async function revealCard(id: string): Promise<{ pan: string; cvv: string
 }
 
 /** Available cards for a flow: usable balance and not already scheduled in this flow
- *  (unlimited = once per flow; numeric = while remaining_balance > 0). */
-export async function availableForFlow(flowId: string, limit: number) {
+ *  (unlimited = once per flow; numeric = while remaining_balance > 0). Optional
+ *  `source` restricts to one source file (used to schedule the DUMMY-TEST cards). */
+export async function availableForFlow(flowId: string, limit: number, source?: string) {
   const used = await db.schedule.findMany({ where: { flowId }, select: { cardId: true } });
   const usedIds = new Set(used.map((u) => u.cardId));
-  const cards = await db.card.findMany({
-    where: { OR: [{ isUnlimited: true }, { remainingBalance: { gt: 0 } }] },
-    orderBy: { createdAt: "asc" },
-  });
+  const where: { OR: object[]; sourceFile?: string } = { OR: [{ isUnlimited: true }, { remainingBalance: { gt: 0 } }] };
+  if (source) where.sourceFile = source;
+  const cards = await db.card.findMany({ where, orderBy: { createdAt: "asc" } });
   return cards.filter((c) => !usedIds.has(c.id)).slice(0, limit);
+}
+
+/** Distinct source files present in the pool (for the Add-Cards source picker). */
+export async function cardSources(): Promise<string[]> {
+  const rows = await db.card.findMany({ select: { sourceFile: true }, distinct: ["sourceFile"] });
+  return rows.map((r) => r.sourceFile).filter((s): s is string => !!s).sort();
 }

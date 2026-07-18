@@ -199,4 +199,7 @@ const STYLES = `
 .lg-raw{margin-top:14px;border:1px solid var(--lg-border);border-radius:10px;overflow:hidden} .lg-raw summary{list-style:none;cursor:pointer;padding:10px 13px;font-size:12.5px;font-weight:600;color:var(--lg-mut);background:var(--lg-panel2)} .lg-raw summary::-webkit-details-marker{display:none}
 .lg-raw pre{margin:0;padding:13px;font-size:11px;line-height:1.55;color:var(--lg-mut);overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:260px}
 @media (max-width:820px){.lg-kpis{grid-template-columns:repeat(2,1fr)}.lg-meta{grid-template-columns:repeat(2,1fr)}}
+/* force LIGHT to match the (light) MUI app shell — cohesive, readable heading */
+.lgroot{--lg-bg:#f6f7fb;--lg-panel:#fff;--lg-panel2:#fbfbfe;--lg-hover:#f5f6fd;--lg-border:#e9eaf2;--lg-border2:#dde0ec;--lg-text:#1a1c24;--lg-mut:#5d6577;--lg-faint:#949bad;--lg-accent:#5a56e0;--lg-accentink:#4b47d6;--lg-accsoft:rgba(90,86,224,.09);--lg-good:#17915f;--lg-goodsoft:rgba(23,145,95,.12);--lg-bad:#d23b41;--lg-badsoft:rgba(210,59,65,.12);--lg-warn:#b07219;--lg-warnsoft:rgba(176,114,25,.14)}
+.lg-glyph{background:linear-gradient(135deg,#e7e8f5,#d8daf0);color:#5a56e0}
 `;

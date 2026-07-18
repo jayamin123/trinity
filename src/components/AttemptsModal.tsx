@@ -1,13 +1,27 @@
 "use client";
 import { useEffect, useState } from "react";
-import { get } from "@/lib/api";
+import { get, post } from "@/lib/api";
 
 type Attempt = { id: string; firedAt: string; success: boolean; orderId: string | null; actualMid: string | null; plannedMid: string | null; ccMessage: string | null; amountPaid: number | null; rawResponse: string | null };
 
-export function AttemptsModal({ scheduleId, title, sub, onClose }: { scheduleId: string; title: string; sub: string; onClose: () => void }) {
+export function AttemptsModal({ scheduleId, title, sub, onClose, onDone }: { scheduleId: string; title: string; sub: string; onClose: () => void; onDone?: () => void }) {
   const [items, setItems] = useState<Attempt[] | null>(null);
+  const [busy, setBusy] = useState(false);
   useEffect(() => { get<Attempt[]>(`/api/schedules/${scheduleId}/attempts`).then(setItems).catch(() => setItems([])); }, [scheduleId]);
   const raw = items?.find((a) => a.rawResponse)?.rawResponse;
+  const lastFailed = items && items.length > 0 && !items[items.length - 1].success;
+
+  async function retry() {
+    if (!confirm("Requeue this card to charge again? (won't actually fire — flows2 has no cron)")) return;
+    setBusy(true);
+    try {
+      const when = new Date(Date.now() + 86400000).toISOString(); // tomorrow
+      await post(`/api/schedules/${scheduleId}/retry`, { when });
+      onDone?.();
+      onClose();
+    } catch (e) { alert(e instanceof Error ? e.message : "failed"); setBusy(false); }
+  }
+
   return (
     <div className="scrim" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -26,6 +40,9 @@ export function AttemptsModal({ scheduleId, title, sub, onClose }: { scheduleId:
           </div>
           {raw && <details className="raw"><summary>Raw CheckoutChamp response</summary><pre className="mono">{raw}</pre></details>}
         </div>
+        {lastFailed && onDone && (
+          <div className="m-foot"><div className="spacer" /><button className="btn primary" disabled={busy} onClick={retry}>{busy ? "…" : "Retry (requeue)"}</button></div>
+        )}
       </div>
     </div>
   );

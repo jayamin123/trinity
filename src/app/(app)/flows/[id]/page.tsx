@@ -1,12 +1,12 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { get, post, del } from "@/lib/api";
+import { get, post, del, patch } from "@/lib/api";
 import { StatusPill } from "@/components/StatusPill";
 import { AttemptsModal } from "@/components/AttemptsModal";
 
-type Flow = { id: string; name: string; status: string; startDate: string; endDate: string; ccGatewayName: string | null; ccCampaignName: string | null; totalCards: number; products: { id: string; name: string | null; price: number; count: number }[] };
+type Flow = { id: string; name: string; status: string; startDate: string; endDate: string; ccGatewayName: string | null; ccCampaignName: string | null; totalCards: number; products: { id: string; productId: string; name: string | null; price: number; count: number }[] };
 type SRow = { id: string; cardName: string; panLast4: string; scheduledFor: string; status: string; productName: string | null; price: number; ccGatewayId: string | null; success: boolean | null };
 type Day = { date: string; scheduled: number; done: number; pending: number; failed: number; rows: SRow[] };
 type Tx = { id: string; scheduleId: string; firedAt: string; cardName: string; panLast4: string; productName: string | null; amountPaid: number | null; actualMid: string | null; plannedMid: string | null; success: boolean; ccMessage: string | null; retried: boolean };
@@ -25,6 +25,7 @@ export default function FlowDetailPage() {
   const [when, setWhen] = useState<"future" | "past" | "all">("all");
   const [showFailed, setShowFailed] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [detail, setDetail] = useState<{ scheduleId: string; cardName: string; panLast4: string } | null>(null);
   const [logMid, setLogMid] = useState("all");
   const [logVerdict, setLogVerdict] = useState("all");
@@ -60,6 +61,12 @@ export default function FlowDetailPage() {
     if (!confirm("Delete this pending schedule? The card returns to the pool.")) return;
     try { await del(`/api/schedules/${sid}`); loadDays(); loadFlow(); } catch (e) { alert(e instanceof Error ? e.message : "failed"); }
   }
+  async function editSchedule(sid: string, current: string) {
+    const val = prompt("New date & time (YYYY-MM-DD HH:MM, BKK):", new Date(current).toISOString().slice(0, 16).replace("T", " "));
+    if (!val) return;
+    const iso = new Date(val.replace(" ", "T") + ":00.000Z").toISOString();
+    try { await patch(`/api/schedules/${sid}`, { scheduledFor: iso }); loadDays(); } catch (e) { alert(e instanceof Error ? e.message : "failed"); }
+  }
 
   return (
     <>
@@ -69,6 +76,7 @@ export default function FlowDetailPage() {
           <p>{flow ? `${flow.ccGatewayName?.split(" - ")[0] ?? "—"} · ${flow.ccCampaignName ?? ""} · ${flow.totalCards} cards · ${flow.products.length} products` : "…"}</p>
         </div>
         <div className="spacer" />
+        {flow && <button className="btn" onClick={() => setEditOpen(true)}>Edit</button>}
         {flow && <button className="btn" onClick={pauseResume}>{flow.status === "paused" ? "Resume" : "Pause"}</button>}
         <button className="btn primary" onClick={() => setAddOpen(true)}>+ Add cards</button>
         <Link className="btn" href="/flows">← Flows</Link>
@@ -112,7 +120,7 @@ export default function FlowDetailPage() {
                       <td className="muted" style={{ fontSize: 12 }}>{r.productName} · ${r.price} · MID {r.ccGatewayId}</td>
                       <td colSpan={2} className="right">
                         {r.status === "done" ? (r.success === false ? <span className="pill no"><span className="dot" />failed</span> : <span className="pill ok"><span className="dot" />done</span>)
-                          : <><span className="pill warn"><span className="dot" />{r.status}</span> <button className="btn" style={{ padding: "2px 8px", fontSize: 11, marginLeft: 6 }} onClick={() => deleteSchedule(r.id)}>Delete</button></>}
+                          : <><span className="pill warn"><span className="dot" />{r.status}</span> <button className="btn" style={{ padding: "2px 8px", fontSize: 11, marginLeft: 6 }} onClick={() => editSchedule(r.id, r.scheduledFor)}>Edit</button> <button className="btn" style={{ padding: "2px 8px", fontSize: 11 }} onClick={() => deleteSchedule(r.id)}>Delete</button></>}
                       </td>
                     </tr>
                   )) : []),
@@ -146,8 +154,61 @@ export default function FlowDetailPage() {
       </div>
 
       {addOpen && flow && <AddCardsDialog flowId={id} onClose={() => setAddOpen(false)} onDone={() => { setAddOpen(false); loadDays(); loadFlow(); }} />}
-      {detail && <AttemptsModal scheduleId={detail.scheduleId} title={detail.cardName} sub={`••${detail.panLast4}`} onClose={() => setDetail(null)} />}
+      {editOpen && flow && <EditFlowModal flow={flow} onClose={() => setEditOpen(false)} onSaved={() => { setEditOpen(false); loadFlow(); }} />}
+      {detail && <AttemptsModal scheduleId={detail.scheduleId} title={detail.cardName} sub={`••${detail.panLast4}`} onClose={() => setDetail(null)} onDone={() => { loadDays(); loadLogs(); loadFlow(); }} />}
     </>
+  );
+}
+
+function EditFlowModal({ flow, onClose, onSaved }: { flow: Flow; onClose: () => void; onSaved: () => void }) {
+  const router = useRouter();
+  const [name, setName] = useState(flow.name);
+  const [start, setStart] = useState(flow.startDate.slice(0, 10));
+  const [end, setEnd] = useState(flow.endDate.slice(0, 10));
+  const [products, setProducts] = useState(flow.products);
+  const [np, setNp] = useState({ productId: "", name: "", price: "" });
+  const [msg, setMsg] = useState("");
+  async function save() {
+    try { await patch(`/api/flows/${flow.id}`, { name, startDate: start, endDate: end }); onSaved(); }
+    catch (e) { setMsg(e instanceof Error ? e.message : "failed"); }
+  }
+  async function addProd() {
+    if (!np.productId || !np.name || !np.price) return;
+    try { await post(`/api/flows/${flow.id}/products`, { productId: np.productId, name: np.name, price: Number(np.price) }); setProducts([...products, { id: "tmp-" + Date.now(), productId: np.productId, name: np.name, price: Number(np.price), count: 0 }]); setNp({ productId: "", name: "", price: "" }); }
+    catch (e) { setMsg(e instanceof Error ? e.message : "failed"); }
+  }
+  async function delProd(pid: string) {
+    try { await del(`/api/flows/${flow.id}/products/${pid}`); setProducts(products.filter((p) => p.id !== pid)); } catch (e) { setMsg(e instanceof Error ? e.message : "failed"); }
+  }
+  async function delFlow() {
+    if (!confirm("Delete this flow? Only allowed if nothing has fired.")) return;
+    try { await del(`/api/flows/${flow.id}`); router.push("/flows"); } catch (e) { setMsg(e instanceof Error ? e.message : "failed"); }
+  }
+  return (
+    <div className="scrim" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+        <div className="mh"><div style={{ flex: 1 }}><div style={{ fontWeight: 660, fontSize: 17 }}>Edit flow</div><div className="faint" style={{ fontSize: 12 }}>{flow.name}</div></div><button className="mclose" onClick={onClose}>✕</button></div>
+        <div className="mb" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <label><div className="k" style={{ fontSize: 11, marginBottom: 4 }}>Name</div><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></label>
+          <div style={{ display: "flex", gap: 10 }}>
+            <label style={{ flex: 1 }}><div className="k" style={{ fontSize: 11, marginBottom: 4 }}>Start</div><input className="input" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+            <label style={{ flex: 1 }}><div className="k" style={{ fontSize: 11, marginBottom: 4 }}>End</div><input className="input" type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+          </div>
+          <div>
+            <div className="k" style={{ fontSize: 11, marginBottom: 6 }}>Products ({products.length})</div>
+            {products.map((p) => <div key={p.id} className="minirow"><span style={{ flex: 1 }}>{p.name} <span className="faint">#{p.productId}</span></span><span className="mono">${p.price}</span><button className="btn" style={{ padding: "2px 8px", fontSize: 11 }} onClick={() => delProd(p.id)}>Remove</button></div>)}
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <input className="input" style={{ width: 70 }} placeholder="id" value={np.productId} onChange={(e) => setNp({ ...np, productId: e.target.value })} />
+              <input className="input" style={{ flex: 1 }} placeholder="name" value={np.name} onChange={(e) => setNp({ ...np, name: e.target.value })} />
+              <input className="input" style={{ width: 70 }} placeholder="$" value={np.price} onChange={(e) => setNp({ ...np, price: e.target.value })} />
+              <button className="btn" onClick={addProd}>Add</button>
+            </div>
+          </div>
+          {msg && <div className="pill no"><span className="dot" />{msg}</div>}
+        </div>
+        <div className="m-foot"><button className="btn" style={{ color: "var(--bad)" }} onClick={delFlow}>Delete flow</button><div className="spacer" /><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={save}>Save</button></div>
+      </div>
+    </div>
   );
 }
 

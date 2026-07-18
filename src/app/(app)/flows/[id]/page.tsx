@@ -286,7 +286,7 @@ function AddCardsDialog({ flowId, products, onClose, onDone }: { flowId: string;
             <table className="tbl">
               <thead><tr><th style={{ width: 30 }}><input type="checkbox" checked={shown.length > 0 && shown.every((p) => checked.has(p.productId))} onChange={(e) => setChecked(e.target.checked ? new Set(shown.map((p) => p.productId)) : new Set())} /></th><th>Product</th><th className="right">Price</th><th className="right" style={{ width: 90 }}>Count</th></tr></thead>
               <tbody>
-                {shown.map((p) => (
+                {shown.slice(0, 150).map((p) => (
                   <tr key={p.id}>
                     <td><input type="checkbox" checked={checked.has(p.productId)} onChange={() => toggle(p.productId)} /></td>
                     <td>{p.name} <span className="faint mono">#{p.productId}</span></td>
@@ -294,6 +294,7 @@ function AddCardsDialog({ flowId, products, onClose, onDone }: { flowId: string;
                     <td className="right"><input className="input" style={{ width: 70, padding: "5px 8px" }} type="number" min={0} value={counts[p.productId] || 0} onChange={(e) => setCount(p.productId, Number(e.target.value))} /></td>
                   </tr>
                 ))}
+                {shown.length > 150 && <tr><td colSpan={4} className="faint" style={{ textAlign: "center", fontSize: 12 }}>Showing 150 of {shown.length.toLocaleString()} — refine the filter to see more (bulk Set/Distribute apply to all {targets().length} checked).</td></tr>}
                 {shown.length === 0 && <tr><td colSpan={4} className="loading">No products match.</td></tr>}
               </tbody>
             </table>

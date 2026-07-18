@@ -90,11 +90,15 @@ Legend: ✅ present · 🟡 partial · ❌ missing · 🔒 needs ENCRYPTION_KEY 
 | Save | ✅ (🔒 503 w/o key) |
 | Test connection | ✅ (🔒 503 w/o key) |
 
-## Gap backlog (to close, page order)
-1. Cards: **Flow filter** + **CC-verdict filter** + card-modal flow links.
-2. Logs: **Product / MID / Cascade / CC-message** filters (+ Amount).
-3. Flows: **+ New flow** entry.
-4. Flow detail: **Edit flow modal** (name/window/products/delete), **edit pending schedule**, **Retry** in attempts modal, Activity **Planned vs Executed** + cascade + message columns.
-5. New Flow builder (🔒 CC — build UI + graceful).
-6. Dashboard: range + group-by rollup.
-7. CSV export on grids; CSV upload (🔒).
+## Gap backlog — status
+- [x] **Batch 1** Cards Flow + CC-verdict filters · Logs Product/MID/Cascade/CC-message filters
+- [x] **Batch 2** Flow detail: Edit-flow modal (name/window/products/delete) · edit pending schedule · Retry in attempts modal
+- [x] **Batch 3** Flows "+ New flow" → New Flow builder (manual + CC pickers, graceful 503 without key)
+- [x] **Batch 4** CSV export on Cards + Logs grids · Dashboard by-flow / by-product breakdown
+
+### Remaining (minor / 🔒)
+- Card modal → clickable flow links (cosmetic)
+- Activity "actual product executed" extracted from raw CC response (we show planned product + planned→actual MID + cascade)
+- Dashboard date-range toggle (we added group-by; range is minor)
+- New-flow/Add-cards "smart product filter + roll distribution shapes" (we do even distribution across the window)
+- 🔒 CSV upload of new cards (needs ENCRYPTION_KEY to encrypt PAN/CVV)

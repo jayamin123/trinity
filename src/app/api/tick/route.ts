@@ -1,33 +1,15 @@
-import { tick, recoverFromCrash, runSchedulerSafetyCheck } from "@/lib/tick";
+import { NextResponse } from "next/server";
 
-/**
- * Trigger endpoint for the scheduler.  Hit every minute by Cloudflare Cron
- * Triggers in production, and by the local node-cron loop in `instrumentation.ts`
- * in dev mode.
- *
- * Each invocation:
- *   1. Runs the startup safety check (refuses to run if SQL date comparison is
- *      broken — the bug we fixed on 2026-05-23 cannot silently return).
- *   2. Cleans up any stuck "processing" cards (crash recovery).
- *   3. Runs one tick (claims at most 1 card, charges it, records result).
- */
-export async function POST() {
-  try {
-    await runSchedulerSafetyCheck();
-  } catch (err) {
-    const stack = err instanceof Error ? err.stack : "(no stack)";
-    console.error("[Trinity tick] SAFETY CHECK FAILED:", err);
-    console.error("[Trinity tick] STACK:", stack);
-    return Response.json(
-      { ok: false, error: "Safety check failed — refusing to tick", details: String(err), stack },
-      { status: 503 },
-    );
-  }
+// SAFETY: firing is DISABLED on this deployment. flows2 has no cron trigger and
+// FIRING_ENABLED is "0", so this endpoint never charges. It exists only so the
+// route contract is complete; it is a hard no-op until firing is deliberately
+// enabled in the ledger-v2 fire path (which does not exist here yet).
+export const dynamic = "force-dynamic";
 
-  await recoverFromCrash();
-  const result = await tick();
-  return Response.json({ ok: true, ...result });
+function response() {
+  const enabled = process.env.FIRING_ENABLED === "1";
+  return NextResponse.json({ disabled: !enabled, fired: 0, note: "firing disabled on flows2" });
 }
 
-// Allow GET for manual triggering / health checks
-export const GET = POST;
+export async function POST() { return response(); }
+export async function GET() { return response(); }

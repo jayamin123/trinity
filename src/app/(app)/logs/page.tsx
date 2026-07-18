@@ -15,13 +15,24 @@ export default function LogsPage() {
   const [rows, setRows] = useState<TxRow[] | null>(null);
   const [verdict, setVerdict] = useState("all");
   const [flow, setFlow] = useState("all");
+  const [product, setProduct] = useState("all");
+  const [mid, setMid] = useState("all");
+  const [cascade, setCascade] = useState(false);
+  const [msg, setMsg] = useState("");
   const [open, setOpen] = useState<TxRow | null>(null);
   useEffect(() => { get<TxRow[]>("/api/logs?limit=500").then(setRows).catch(() => setRows([])); }, []);
 
   const flows = useMemo(() => [...new Map((rows ?? []).map((r) => [r.flowId, r.flowName])).entries()], [rows]);
+  const products = useMemo(() => [...new Set((rows ?? []).map((r) => r.productName).filter(Boolean))] as string[], [rows]);
+  const mids = useMemo(() => [...new Set((rows ?? []).map((r) => r.actualMid ?? r.plannedMid).filter(Boolean))] as string[], [rows]);
   const shown = useMemo(() => (rows ?? []).filter((r) =>
-    (verdict === "all" || (verdict === "ok") === r.success) && (flow === "all" || r.flowId === flow)
-  ), [rows, verdict, flow]);
+    (verdict === "all" || (verdict === "ok") === r.success) &&
+    (flow === "all" || r.flowId === flow) &&
+    (product === "all" || r.productName === product) &&
+    (mid === "all" || (r.actualMid ?? r.plannedMid) === mid) &&
+    (!cascade || r.cascadeUsed) &&
+    (!msg || (r.ccMessage ?? "").toLowerCase().includes(msg.toLowerCase()))
+  ), [rows, verdict, flow, product, mid, cascade, msg]);
 
   const kpi = useMemo(() => {
     const all = rows ?? [];
@@ -68,6 +79,10 @@ export default function LogsPage() {
             <button className={verdict === "fail" ? "on" : ""} onClick={() => setVerdict("fail")}>Declined <span className="faint">{kpi.failed}</span></button>
           </div>
           <label className="chip">Flow: <select value={flow} onChange={(e) => setFlow(e.target.value)}><option value="all">All</option>{flows.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+          <label className="chip">Product: <select value={product} onChange={(e) => setProduct(e.target.value)}><option value="all">All</option>{products.map((p) => <option key={p} value={p}>{p}</option>)}</select></label>
+          <label className="chip">MID: <select value={mid} onChange={(e) => setMid(e.target.value)}><option value="all">All</option>{mids.map((m) => <option key={m} value={m}>MID {m}</option>)}</select></label>
+          <label className="chip"><input type="checkbox" checked={cascade} onChange={(e) => setCascade(e.target.checked)} style={{ accentColor: "var(--accent)" }} /> Cascaded</label>
+          <input className="input" style={{ width: 150 }} placeholder="CC message…" value={msg} onChange={(e) => setMsg(e.target.value)} />
           <div className="spacer" /><span className="faint" style={{ fontSize: 12 }}>{shown.length} of {rows?.length ?? 0}</span>
         </div>
 

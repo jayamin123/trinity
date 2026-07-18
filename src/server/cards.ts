@@ -14,13 +14,16 @@ export type CardRow = {
   pending: number; // # pending schedules
   done: number; // # done schedules (fired)
   flowIds: string[];
+  verdict: "approved" | "declined" | "mixed" | null; // CC verdict across this card's transactions
+  cascade: boolean; // any transaction used a cascade
 };
 
-/** Whole card pool with derived per-card schedule counts (2 flat queries, joined in JS). */
+/** Whole card pool with derived per-card schedule counts + CC verdict (flat queries, joined in JS). */
 export async function listCards(): Promise<CardRow[]> {
-  const [cards, schedules] = await Promise.all([
+  const [cards, schedules, txs] = await Promise.all([
     db.card.findMany({ orderBy: { createdAt: "desc" } }),
     db.schedule.findMany({ select: { cardId: true, flowId: true, status: true } }),
+    db.transaction.findMany({ select: { cardId: true, success: true, cascadeUsed: true } }),
   ]);
   const byCard = new Map<string, { pending: number; done: number; flows: Set<string> }>();
   for (const s of schedules) {
@@ -30,8 +33,17 @@ export async function listCards(): Promise<CardRow[]> {
     if (s.status === "pending" || s.status === "processing") e.pending++;
     else if (s.status === "done") e.done++;
   }
+  const vByCard = new Map<string, { ok: boolean; fail: boolean; cascade: boolean }>();
+  for (const t of txs) {
+    let v = vByCard.get(t.cardId);
+    if (!v) vByCard.set(t.cardId, (v = { ok: false, fail: false, cascade: false }));
+    if (t.success) v.ok = true; else v.fail = true;
+    if (t.cascadeUsed) v.cascade = true;
+  }
   return cards.map((c) => {
     const e = byCard.get(c.id);
+    const v = vByCard.get(c.id);
+    const verdict = v ? (v.fail ? (v.ok ? "mixed" : "declined") : v.ok ? "approved" : null) : null;
     return {
       id: c.id,
       name: `${c.firstName} ${c.lastName}`,
@@ -42,6 +54,8 @@ export async function listCards(): Promise<CardRow[]> {
       pending: e?.pending ?? 0,
       done: e?.done ?? 0,
       flowIds: e ? [...e.flows] : [],
+      verdict: verdict as CardRow["verdict"],
+      cascade: v?.cascade ?? false,
     };
   });
 }

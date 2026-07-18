@@ -3,19 +3,27 @@ import { useEffect, useMemo, useState } from "react";
 import { get, post } from "@/lib/api";
 
 type Bal = { isUnlimited: boolean; start: number | null; remaining: number | null; label: string; usable: boolean; overBalance: boolean };
-type CardRow = { id: string; name: string; panLast4: string; email: string | null; sourceFile: string | null; balance: Bal; pending: number; done: number; flowIds: string[] };
+type CardRow = { id: string; name: string; panLast4: string; email: string | null; sourceFile: string | null; balance: Bal; pending: number; done: number; flowIds: string[]; verdict: string | null; cascade: boolean };
 
 const TABS = [["all", "All"], ["pool", "Pool"], ["pending", "Pending"], ["fired", "Fired"]] as const;
 
 export default function CardsPage() {
   const [cards, setCards] = useState<CardRow[] | null>(null);
+  const [flows, setFlows] = useState<{ id: string; name: string }[]>([]);
   const [tab, setTab] = useState<string>("all");
   const [bal, setBal] = useState("all");
   const [source, setSource] = useState("all");
+  const [flow, setFlow] = useState("all");
+  const [verdict, setVerdict] = useState("all");
   const [openId, setOpenId] = useState<string | null>(null);
-  useEffect(() => { get<CardRow[]>("/api/cards").then(setCards).catch(() => setCards([])); }, []);
+  useEffect(() => {
+    get<CardRow[]>("/api/cards").then(setCards).catch(() => setCards([]));
+    get<{ id: string; name: string }[]>("/api/flows").then(setFlows).catch(() => {});
+  }, []);
 
   const sources = useMemo(() => [...new Set((cards ?? []).map((c) => c.sourceFile).filter(Boolean))] as string[], [cards]);
+  const showFlow = tab === "pending" || tab === "fired" || tab === "all";
+  const showVerdict = tab === "fired" || tab === "all";
   const rows = useMemo(() => (cards ?? []).filter((c) => {
     if (tab === "pool" && !(c.pending === 0 && c.balance.usable)) return false;
     if (tab === "pending" && c.pending === 0) return false;
@@ -23,8 +31,11 @@ export default function CardsPage() {
     if (bal === "unlim" && !c.balance.isUnlimited) return false;
     if (bal === "has" && (c.balance.isUnlimited || !c.balance.usable)) return false;
     if (source !== "all" && c.sourceFile !== source) return false;
+    if (flow !== "all" && !c.flowIds.includes(flow)) return false;
+    if (verdict === "cascade" && !c.cascade) return false;
+    if (verdict !== "all" && verdict !== "cascade" && c.verdict !== verdict) return false;
     return true;
-  }), [cards, tab, bal, source]);
+  }), [cards, tab, bal, source, flow, verdict]);
 
   return (
     <>
@@ -34,6 +45,8 @@ export default function CardsPage() {
           <div className="seg">{TABS.map(([v, l]) => <button key={v} className={tab === v ? "on" : ""} onClick={() => setTab(v)}>{l}</button>)}</div>
           <label className="chip">Balance: <select value={bal} onChange={(e) => setBal(e.target.value)}><option value="all">All</option><option value="unlim">Unlimited</option><option value="has">Has a balance</option></select></label>
           <label className="chip">Source: <select value={source} onChange={(e) => setSource(e.target.value)}><option value="all">All</option>{sources.map((s) => <option key={s} value={s}>{s.length > 30 ? "…" + s.slice(-28) : s}</option>)}</select></label>
+          {showFlow && <label className="chip">Flow: <select value={flow} onChange={(e) => setFlow(e.target.value)}><option value="all">All</option>{flows.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
+          {showVerdict && <label className="chip">Verdict: <select value={verdict} onChange={(e) => setVerdict(e.target.value)}><option value="all">All</option><option value="approved">Approved</option><option value="declined">Declined</option><option value="mixed">Mixed</option><option value="cascade">Cascaded</option></select></label>}
           <div className="spacer" /><span className="faint" style={{ fontSize: 12 }}>{rows.length.toLocaleString()} shown</span>
         </div>
         {!cards ? <div className="loading">Loading…</div> : (

@@ -10,6 +10,7 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "binding": "ASSETS", "directory": ".open-next/assets" },
   "vars": { "CLOUDFLARE_WORKER": "1", "FIRING_ENABLED": "0" },
+  "workers_dev": true,
   "routes": [{ "pattern": "flows2.accotta.me", "custom_domain": true }],
   "d1_databases": [
     { "binding": "DB", "database_name": "trinity-flows-2", "database_id": "82dcd5fb-9d5e-48c3-bb5e-367972dca4e8" }

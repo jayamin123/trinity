@@ -1,0 +1,19 @@
+{
+  // SAFETY-CRITICAL duplicate deployment (ledger, in-place-schema copy of the real app).
+  //   • name "trinity-flows-2" (NOT "trinity-flows") — can never overwrite live.
+  //   • NO "triggers.crons" key → Cloudflare never calls scheduled() → CANNOT fire.
+  //   • FIRING_ENABLED="0" second guard.  Targets the duplicated DB trinity-flows-2.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "trinity-flows-2",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-03-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "binding": "ASSETS", "directory": ".open-next/assets" },
+  "vars": { "CLOUDFLARE_WORKER": "1", "FIRING_ENABLED": "0" },
+  "routes": [{ "pattern": "flows2.accotta.me", "custom_domain": true }],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "trinity-flows-2", "database_id": "82dcd5fb-9d5e-48c3-bb5e-367972dca4e8" }
+  ],
+  "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "trinity-uploads" }],
+  "observability": { "enabled": true }
+}

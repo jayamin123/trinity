@@ -1,68 +1,48 @@
-import { Box, Typography } from "@mui/material";
 import { db } from "@/lib/db";
-import ActivityTable from "./ActivityTable";
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-import { parseFirePlan, parseFireAttempts } from "@/lib/flows";
-dayjs.extend(utc);
+import ActivityLedger from "./ActivityLedger";
 
-/** Actual product CheckoutChamp charged, pulled from the raw response. */
-function actualProduct(rawStr: string): { name: string; id: string } | null {
-  try {
-    const obj = JSON.parse(rawStr);
-    const msg = obj && typeof obj.message === "object" ? obj.message : obj;
-    const item = msg?.items?.[0];
-    if (!item) return null;
-    return { name: String(item.name ?? "—"), id: String(item.actualProductId ?? item.productId ?? "—") };
-  } catch {
-    return null;
-  }
-}
-
+// The Activity page now reads the append-only `transactions` (logs) table —
+// one row per CheckoutChamp attempt, lifted out of the fire_attempts JSON. A
+// retried schedule shows BOTH the declined attempt and the approved one; nothing
+// is hidden. (The old version showed one row per fired schedule, latest attempt.)
 export default async function ActivityPage() {
-  const schedules = await db.schedule.findMany({
-    where: { status: "fired" },
-    orderBy: { firedAt: "desc" },
-    take: 500,
-    include: {
-      card: { select: { panLast4: true } },
-      flow: { select: { name: true } },
-    },
-  });
+  const [txs, cards, flows] = await Promise.all([
+    db.transaction.findMany({ orderBy: { firedAt: "desc" }, take: 1000 }),
+    db.card.findMany({ select: { id: true, panLast4: true, cardData: true } }),
+    db.flow.findMany({ select: { id: true, name: true } }),
+  ]);
 
-  const rows = schedules.map(s => {
-    const plan = parseFirePlan(s.firePlan);
-    const attempts = parseFireAttempts(s.fireAttempts);
-    const last = attempts[attempts.length - 1];
-    const actual = last ? actualProduct(last.cc_response.raw) : null;
-    const paid = last?.amount_paid != null ? `$${last.amount_paid.toFixed(2)}` : "—";
-    return {
-      id: s.id,
-      when: s.firedAt ? dayjs.utc(s.firedAt).format("MMM D, h:mm A") : "—",
-      flow: s.flow.name,
-      card: `•••• ${s.card.panLast4}`,
-      planned: `${plan.product_name} · $${plan.price.toFixed(2)} · MID ${plan.cc_gateway_id}`,
-      // Mirror the Planned format, with the ACTUAL product/price/MID that fired.
-      executed: last
-        ? `${actual ? actual.name + " · " : ""}${paid} · MID ${last.actual_cc_gateway_id ?? "—"}`
-        : "—",
-      executedProduct: actual?.name ?? "—",
-      amountPaid: last?.amount_paid ?? null,
-      actualMid: last?.actual_cc_gateway_id ?? null,
-      cascade: last?.cascade_used ?? false,
-      success: s.success,
-      message: last?.cc_response.message ?? "—",
-      orderId: s.orderId ?? "—",
-    };
-  });
+  const cardMap = new Map(cards.map((c) => {
+    let name = "—";
+    try { const d = JSON.parse(c.cardData); name = `${d.cardholder?.first_name ?? ""} ${d.cardholder?.last_name ?? ""}`.trim() || "—"; } catch {}
+    return [c.id, { name, last4: c.panLast4 }];
+  }));
+  const flowMap = new Map(flows.map((f) => [f.id, f.name]));
 
-  return (
-    <Box>
-      <Typography variant="h4" gutterBottom>Activity</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Every fired schedule across all flows (latest 500).
-      </Typography>
-      <ActivityTable rows={rows} />
-    </Box>
-  );
+  const attemptCount = new Map<string, number>();
+  for (const t of txs) attemptCount.set(t.scheduleId, (attemptCount.get(t.scheduleId) ?? 0) + 1);
+
+  const rows = txs.map((t) => ({
+    id: t.id,
+    scheduleId: t.scheduleId,
+    firedAt: t.firedAt.toISOString(),
+    cardName: cardMap.get(t.cardId)?.name ?? "—",
+    last4: cardMap.get(t.cardId)?.last4 ?? "",
+    flowName: flowMap.get(t.flowId) ?? "—",
+    productName: t.productName,
+    price: t.price,
+    amountPaid: t.amountPaid,
+    plannedMid: t.plannedMid,
+    actualMid: t.actualMid,
+    cascade: t.cascadeUsed,
+    success: t.success,
+    orderId: t.orderId,
+    message: t.ccMessage,
+    rawResponse: t.rawResponse,
+    attemptIndex: t.attemptIndex,
+    retried: (attemptCount.get(t.scheduleId) ?? 0) > 1,
+  }));
+
+  return <ActivityLedger rows={rows} />;
 }
+

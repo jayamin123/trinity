@@ -113,3 +113,39 @@ model Schedule {
   @@index([cardId])
   @@map("schedules")
 }
+
+// ---------------------------------------------------------------------------
+// transactions — the append-only LOGS table. One row per CheckoutChamp
+// /order/import/ attempt, lifted OUT of schedules.fire_attempts JSON so the
+// activity/logs page can query real rows (retries never hide history).
+// No Prisma relations (kept decoupled from the existing JSON models on purpose);
+// scheduleId/cardId/flowId are plain FK columns joined in the service layer.
+// ---------------------------------------------------------------------------
+model Transaction {
+  id           String   @id
+  scheduleId   String   @map("schedule_id")
+  cardId       String   @map("card_id")
+  flowId       String   @map("flow_id")
+  firedAt      DateTime @map("fired_at")
+  success      Boolean  @default(false)
+  orderId      String?  @map("order_id")
+  amountPaid   Float?   @map("amount_paid")
+  plannedMid   String?  @map("planned_mid")
+  actualMid    String?  @map("actual_mid")
+  cascadeUsed  Boolean  @default(false) @map("cascade_used")
+  productId    String?  @map("product_id")
+  productName  String?  @map("product_name")
+  price        Float?
+  ccCode       String?  @map("cc_code")
+  ccMessage    String?  @map("cc_message")
+  rawResponse  String?  @map("raw_response")
+  attemptIndex Int      @default(0) @map("attempt_index")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([scheduleId])
+  @@index([flowId])
+  @@index([cardId])
+  @@index([success])
+  @@index([firedAt])
+  @@map("transactions")
+}

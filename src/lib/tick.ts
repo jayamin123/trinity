@@ -114,6 +114,35 @@ async function processClaimedSchedule(schedule: ClaimedSchedule): Promise<void> 
     },
   });
 
+  // Dual-write the attempt to the append-only `transactions` (logs) table so the
+  // Activity/logs page reads real rows. This is the backend half of taking the
+  // logs out of the fire_attempts JSON. (Firing is disabled on this deployment,
+  // so in practice the ledger is populated by the one-time backfill; this keeps
+  // it correct for any future fire.)
+  await db.transaction.create({
+    data: {
+      id: `${schedule.id}-a${attempts.length - 1}`,
+      scheduleId: schedule.id,
+      cardId: schedule.cardId,
+      flowId: schedule.flowId,
+      firedAt,
+      success: result.success,
+      orderId: result.orderId ?? null,
+      amountPaid: result.amountPaid ?? null,
+      plannedMid: plan.cc_gateway_id,
+      actualMid: result.actualGatewayId ?? null,
+      cascadeUsed: attempt.cascade_used,
+      productId: plan.product_id,
+      productName: plan.product_name,
+      price: plan.price,
+      ccCode: result.responseCode ?? "",
+      ccMessage: result.responseMessage ?? "",
+      rawResponse: result.rawResponse ?? "",
+      attemptIndex: attempts.length - 1,
+      createdAt: firedAt,
+    },
+  });
+
   if (await checkFlowComplete(schedule.flowId)) {
     const flow = await db.flow.findUnique({ where: { id: schedule.flowId } });
     if (flow) {

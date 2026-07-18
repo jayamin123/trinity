@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { get } from "@/lib/api";
 import { StatusPill } from "@/components/StatusPill";
 
@@ -16,7 +17,7 @@ export default function FlowsPage() {
 
   return (
     <>
-      <div className="topbar"><div><h1>Flows</h1><p>Every campaign and its progress</p></div></div>
+      <div className="topbar"><div><h1>Flows</h1><p>Every campaign and its progress</p></div><div className="spacer" /><Link className="btn primary" href="/flows/new">+ New flow</Link></div>
       <div className="content">
         {!flows ? <div className="loading">Loading…</div> : (
           <div className="grid g2">

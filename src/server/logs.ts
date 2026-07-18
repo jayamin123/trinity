@@ -20,6 +20,7 @@ type TxRow = {
   success: boolean;
   orderId: string | null;
   ccMessage: string | null;
+  retried: boolean; // the schedule has more than one attempt
 };
 
 async function decorate(txs: Awaited<ReturnType<typeof db.transaction.findMany>>): Promise<TxRow[]> {
@@ -29,9 +30,12 @@ async function decorate(txs: Awaited<ReturnType<typeof db.transaction.findMany>>
   ]);
   const fMap = new Map(flows.map((f) => [f.id, f.name]));
   const cMap = new Map(cards.map((c) => [c.id, c]));
+  const attemptCount = new Map<string, number>();
+  for (const t of txs) attemptCount.set(t.scheduleId, (attemptCount.get(t.scheduleId) ?? 0) + 1);
   return txs.map((t) => {
     const c = cMap.get(t.cardId);
     return {
+      retried: (attemptCount.get(t.scheduleId) ?? 0) > 1,
       id: t.id,
       scheduleId: t.scheduleId,
       firedAt: t.firedAt,

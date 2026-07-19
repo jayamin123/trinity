@@ -13,6 +13,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import BkkClock from "./BkkClock";
+import ThemeSwitcher from "./ThemeSwitcher";
 
 const SIDEBAR_WIDTH = 224;
 
@@ -26,8 +27,8 @@ const NAV = [
 const BrandMark = ({ size = 30 }: { size?: number }) => (
   <Box sx={{
     width: size, height: size, borderRadius: 2.2, flexShrink: 0,
-    background: "linear-gradient(150deg, #5a56e0, #b3b0ff 130%)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,.35), 0 4px 12px -3px rgba(90,86,224,.4)",
+    background: "linear-gradient(150deg, var(--app-accent), color-mix(in srgb, var(--app-accent) 45%, #ffffff))",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,.35), 0 4px 12px -3px var(--app-accent-soft)",
   }} />
 );
 
@@ -54,10 +55,11 @@ export default function AppShell({
           <Chip
             label="● Scheduler running"
             size="small"
-            sx={{ mr: 2, bgcolor: "rgba(23,145,95,.12)", color: "success.main", fontWeight: 650, border: "none" }}
+            sx={{ mr: 1.5, bgcolor: "var(--app-good-soft)", color: "success.main", fontWeight: 650, border: "none" }}
           />
+          <ThemeSwitcher />
           <IconButton onClick={e => setAnchorEl(e.currentTarget)}>
-            <Avatar sx={{ width: 32, height: 32, bgcolor: "primary.main", color: "#fff", fontSize: 13, fontWeight: 650 }}>
+            <Avatar sx={{ width: 32, height: 32, bgcolor: "primary.main", color: "primary.contrastText", fontSize: 13, fontWeight: 650 }}>
               {userEmail.charAt(0).toUpperCase()}
             </Avatar>
           </IconButton>
@@ -115,13 +117,13 @@ export default function AppShell({
                   borderRadius: 2, my: 0.25, py: 0.9,
                   "& .MuiListItemIcon-root": { color: "text.secondary", minWidth: 38 },
                   "& .MuiListItemText-primary": { fontSize: 13.5, fontWeight: 500 },
-                  "&:hover": { bgcolor: "rgba(90,86,224,.05)" },
+                  "&:hover": { bgcolor: "var(--app-hover)" },
                   "&.Mui-selected": {
-                    bgcolor: "rgba(90,86,224,.10)",
+                    bgcolor: "var(--app-accent-soft)",
                     "& .MuiListItemIcon-root": { color: "primary.main" },
                     "& .MuiListItemText-primary": { color: "primary.main", fontWeight: 600 },
                   },
-                  "&.Mui-selected:hover": { bgcolor: "rgba(90,86,224,.14)" },
+                  "&.Mui-selected:hover": { bgcolor: "var(--app-accent-soft)" },
                 }}
               >
                 <ListItemIcon>{item.icon}</ListItemIcon>

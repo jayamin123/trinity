@@ -27,7 +27,7 @@ export function SummaryCard({
     <Box
       sx={{
         p: 2.5,
-        bgcolor: "#fafafa",
+        bgcolor: "var(--app-panel2)",
         borderRadius: 2,
         borderLeft: 4,
         borderLeftColor: TONE_BORDER[tone],
@@ -50,7 +50,7 @@ export type InfoBarItem = {
 export function InfoBar({ items }: { items: InfoBarItem[] }) {
   return (
     <Box sx={{
-      bgcolor: "#fafafa", borderRadius: 2, p: 2,
+      bgcolor: "var(--app-panel2)", borderRadius: 2, p: 2,
       display: "grid",
       gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: `repeat(${items.length}, 1fr)` },
       gap: 2,
@@ -190,7 +190,7 @@ export function CardIdentity({
   return (
     <Typography variant="body2">
       <b>•••• {last4}</b> · {name}{" "}
-      <span style={{ color: "#888" }}>· exp {exp}</span>
+      <span style={{ color: "var(--app-faint)" }}>· exp {exp}</span>
     </Typography>
   );
 }

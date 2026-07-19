@@ -178,10 +178,10 @@ function OrderHeader({ detail, attempt }: { detail: ScheduleDetail; attempt: Att
         Flow <b>{detail.flowName}</b>  ·  {detail.flow.ccCampaignName}
       </Typography>
       {!attempt.success && (
-        <Box sx={{ p: 1.25, bgcolor: "#ffebee", borderRadius: 1, border: "1px solid", borderColor: "error.light", maxWidth: { sm: "60%" } }}>
+        <Box sx={{ p: 1.25, bgcolor: "var(--app-bad-soft)", borderRadius: 1, border: "1px solid", borderColor: "error.light", maxWidth: { sm: "60%" } }}>
           <Typography variant="body2">
             <b>Decline reason:</b> {attempt.cc_response.message || "(no message)"}
-            {attempt.cc_response.code && <span style={{ color: "#888", marginLeft: 8 }}>Code: {attempt.cc_response.code}</span>}
+            {attempt.cc_response.code && <span style={{ color: "var(--app-faint)", marginLeft: 8 }}>Code: {attempt.cc_response.code}</span>}
           </Typography>
         </Box>
       )}
@@ -258,7 +258,7 @@ function PlanVsActualSection({ detail, attempt }: { detail: ScheduleDetail; atte
       }
     >
       <Box sx={{ border: 1, borderColor: "divider", borderRadius: 2, overflow: "hidden" }}>
-        <Stack direction="row" sx={{ bgcolor: "#f7f7f7", borderBottom: 1, borderColor: "divider" }}>
+        <Stack direction="row" sx={{ bgcolor: "var(--app-panel2)", borderBottom: 1, borderColor: "divider" }}>
           <Box sx={{ width: 140, py: 1, px: 2 }} />
           <Box sx={{ flex: 1, py: 1, px: 2, borderLeft: 1, borderColor: "divider" }}>
             <Typography variant="caption" color="text.secondary" sx={{ textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>
@@ -291,8 +291,8 @@ function PlanVsActualSection({ detail, attempt }: { detail: ScheduleDetail; atte
         />
         <DiffRow
           label="Product"
-          planned={<>{detail.plan.product_name} <span style={{ color: "#888" }}>#{detail.plan.product_id}</span></>}
-          actual={<>{actualProductName} <span style={{ color: "#888" }}>#{actualProductId}</span></>}
+          planned={<>{detail.plan.product_name} <span style={{ color: "var(--app-faint)" }}>#{detail.plan.product_id}</span></>}
+          actual={<>{actualProductName} <span style={{ color: "var(--app-faint)" }}>#{actualProductId}</span></>}
         />
         <DiffRow
           label="Price"
@@ -483,7 +483,7 @@ function RawJsonSection({ raw }: { raw: string }) {
             </IconButton>
           </Tooltip>
         </Stack>
-        <Box sx={{ fontFamily: "monospace", fontSize: 11, p: 1.5, bgcolor: "#f5f5f5", borderRadius: 1, maxHeight: 320, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+        <Box sx={{ fontFamily: "monospace", fontSize: 11, p: 1.5, bgcolor: "var(--app-panel2)", borderRadius: 1, maxHeight: 320, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
           {pretty || "—"}
         </Box>
       </AccordionDetails>

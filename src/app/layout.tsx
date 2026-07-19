@@ -1,19 +1,27 @@
 import type { Metadata } from "next";
-import ThemeRegistry from "@/components/ThemeRegistry";
+import { cookies } from "next/headers";
+import ThemeManager from "@/components/ThemeManager";
+import { themeCss, isThemeName, DEFAULT_THEME } from "@/themes";
 
 export const metadata: Metadata = {
   title: "Trinity",
   description: "Card automation",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const cookieTheme = (await cookies()).get("trinity_theme")?.value;
+  const theme = isThemeName(cookieTheme) ? cookieTheme : DEFAULT_THEME;
+
   return (
-    <html lang="en">
+    <html lang="en" data-theme={theme}>
       <head>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" />
+        {/* Theme design tokens as CSS variables — injected server-side so there
+            is no flash; the plain-CSS surfaces read these, MUI reads the token
+            object. `data-theme` on <html> selects the active set. */}
+        <style dangerouslySetInnerHTML={{ __html: themeCss() }} />
       </head>
       <body>
-        <ThemeRegistry>{children}</ThemeRegistry>
+        <ThemeManager initial={theme}>{children}</ThemeManager>
       </body>
     </html>
   );

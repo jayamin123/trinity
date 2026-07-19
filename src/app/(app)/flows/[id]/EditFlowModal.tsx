@@ -248,7 +248,7 @@ export default function EditFlowModal({
                     const canDelete = p.count === 0;
                     return (
                       <TableRow key={p.id}>
-                        <TableCell>{p.name} <span style={{ color: "#888" }}>#{p.id}</span></TableCell>
+                        <TableCell>{p.name} <span style={{ color: "var(--app-faint)" }}>#{p.id}</span></TableCell>
                         <TableCell align="right">${p.price.toFixed(2)}</TableCell>
                         <TableCell align="right">{p.count}</TableCell>
                         <TableCell align="right">
@@ -273,7 +273,7 @@ export default function EditFlowModal({
               </Table>
 
               {showAddPicker && (
-                <Box sx={{ mt: 2, p: 2, bgcolor: "#fafafa", borderRadius: 1 }}>
+                <Box sx={{ mt: 2, p: 2, bgcolor: "var(--app-panel2)", borderRadius: 1 }}>
                   <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
                     <Typography variant="subtitle2">Add a product</Typography>
                     <Button size="small" onClick={() => setShowAddPicker(false)} disabled={pending}>Close</Button>
@@ -294,7 +294,7 @@ export default function EditFlowModal({
                         <MenuItem value="" disabled>Pick a product…</MenuItem>
                         {addable.map(p => (
                           <MenuItem key={p.id} value={p.id}>
-                            {p.name} <span style={{ color: "#888", marginLeft: 8 }}>#{p.id} · ${p.price.toFixed(2)}</span>
+                            {p.name} <span style={{ color: "var(--app-faint)", marginLeft: 8 }}>#{p.id} · ${p.price.toFixed(2)}</span>
                           </MenuItem>
                         ))}
                       </Select>
@@ -468,7 +468,7 @@ function CompressedAccount({ account }: { account: { name: string; apiUrl: strin
   return (
     <Section title="Account" dense>
       <Typography variant="body2">
-        {account.name} <span style={{ color: "#888" }}>·</span> {account.apiUrl}
+        {account.name} <span style={{ color: "var(--app-faint)" }}>·</span> {account.apiUrl}
       </Typography>
     </Section>
   );

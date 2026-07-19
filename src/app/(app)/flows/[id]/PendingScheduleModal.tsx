@@ -180,7 +180,7 @@ export default function PendingScheduleModal({
                     >
                       {detail.flow.ccProducts.map(p => (
                         <MenuItem key={p.id} value={p.id}>
-                          {p.name} <span style={{ color: "#888", marginLeft: 8 }}>#{p.id}</span>
+                          {p.name} <span style={{ color: "var(--app-faint)", marginLeft: 8 }}>#{p.id}</span>
                         </MenuItem>
                       ))}
                     </Select>
@@ -211,7 +211,7 @@ export default function PendingScheduleModal({
                     <Select size="small" value={ccGatewayId} onChange={e => setCcGatewayId(String(e.target.value))} fullWidth>
                       {gateways.map(g => (
                         <MenuItem key={g.id} value={g.id}>
-                          MID {g.id} <span style={{ color: "#888", marginLeft: 8 }}>· {g.title}</span>
+                          MID {g.id} <span style={{ color: "var(--app-faint)", marginLeft: 8 }}>· {g.title}</span>
                         </MenuItem>
                       ))}
                     </Select>

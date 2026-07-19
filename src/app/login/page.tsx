@@ -5,7 +5,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const { error } = await searchParams;
 
   return (
-    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", bgcolor: "#fafafa" }}>
+    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", bgcolor: "var(--app-panel2)" }}>
       <Card sx={{ width: 400, p: 1 }}>
         <CardContent>
           <Typography variant="h4" gutterBottom>Trinity</Typography>

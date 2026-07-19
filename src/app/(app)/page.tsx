@@ -137,7 +137,7 @@ export default async function DashboardPage({
       <Typography variant="h4" gutterBottom>Dashboard</Typography>
 
       {isFirstTime && (
-        <Card sx={{ mb: 3, bgcolor: "primary.50", border: 1, borderColor: "primary.200" }}>
+        <Card sx={{ mb: 3, bgcolor: "var(--app-accent-soft)", border: 1, borderColor: "var(--app-accent)" }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>Get started</Typography>
             <Stack spacing={1.5}>
@@ -280,7 +280,7 @@ export default async function DashboardPage({
                       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                         <Typography variant="body2" sx={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {r.label}
-                          {r.mid && <span style={{ color: "#888", marginLeft: 6, fontSize: 11 }}>MID {r.mid}</span>}
+                          {r.mid && <span style={{ color: "var(--app-faint)", marginLeft: 6, fontSize: 11 }}>MID {r.mid}</span>}
                         </Typography>
                       </Box>
                       <Box sx={{ width: 52, textAlign: "right" }}><Typography variant="body2" sx={{ fontSize: 13 }}>{r.planned}</Typography></Box>

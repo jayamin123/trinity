@@ -216,7 +216,7 @@ export default function NewFlowForm({ sources, availableCount }: { sources: Flow
             {sources.map(s => (
               <MenuItem key={s.flowId} value={s.flowId}>
                 {s.flowName}
-                <span style={{ color: "#888", marginLeft: 8 }}>· {s.ccCampaign.name} · MID {s.ccGateway.id}</span>
+                <span style={{ color: "var(--app-faint)", marginLeft: 8 }}>· {s.ccCampaign.name} · MID {s.ccGateway.id}</span>
               </MenuItem>
             ))}
           </TextField>
@@ -232,7 +232,7 @@ export default function NewFlowForm({ sources, availableCount }: { sources: Flow
             helperText={loadingOptions ? "Loading gateways…" : " "}
           >
             {gateways.map(g => (
-              <MenuItem key={g.id} value={g.id}>{g.name} <span style={{ color: "#888", marginLeft: 6 }}>· MID {g.id}</span></MenuItem>
+              <MenuItem key={g.id} value={g.id}>{g.name} <span style={{ color: "var(--app-faint)", marginLeft: 6 }}>· MID {g.id}</span></MenuItem>
             ))}
           </TextField>
           <TextField
@@ -242,7 +242,7 @@ export default function NewFlowForm({ sources, availableCount }: { sources: Flow
             helperText={loadingOptions ? "Loading campaigns…" : "Changing this resets the product selection."}
           >
             {campaigns.map(c => (
-              <MenuItem key={c.id} value={c.id}>{c.name} <span style={{ color: "#888", marginLeft: 6 }}>· #{c.id}</span></MenuItem>
+              <MenuItem key={c.id} value={c.id}>{c.name} <span style={{ color: "var(--app-faint)", marginLeft: 6 }}>· #{c.id}</span></MenuItem>
             ))}
           </TextField>
         </Stack>
@@ -269,7 +269,7 @@ export default function NewFlowForm({ sources, availableCount }: { sources: Flow
                 <TableBody>
                   {products.map(p => (
                     <TableRow key={p.id}>
-                      <TableCell>{p.name} <span style={{ color: "#888" }}>(#{p.id})</span></TableCell>
+                      <TableCell>{p.name} <span style={{ color: "var(--app-faint)" }}>(#{p.id})</span></TableCell>
                       <TableCell align="right">
                         <TextField
                           type="number" size="small"
@@ -291,7 +291,7 @@ export default function NewFlowForm({ sources, availableCount }: { sources: Flow
                       </TableCell>
                     </TableRow>
                   ))}
-                  <TableRow sx={{ bgcolor: "#f5f5f5" }}>
+                  <TableRow sx={{ bgcolor: "var(--app-panel2)" }}>
                     <TableCell><b>Total</b></TableCell>
                     <TableCell />
                     <TableCell align="right"><b>{totalCards}</b></TableCell>
@@ -333,11 +333,11 @@ export default function NewFlowForm({ sources, availableCount }: { sources: Flow
           </Stack>
           {previewLoading && <LinearProgress />}
           {preview && (
-            <Box sx={{ bgcolor: "#f5f5f5", p: 2, borderRadius: 1 }}>
+            <Box sx={{ bgcolor: "var(--app-panel2)", p: 2, borderRadius: 1 }}>
               {preview.map(p => (
                 <Stack key={p.date} direction="row" spacing={2} alignItems="center" sx={{ mb: 0.5 }}>
                   <Typography variant="body2" sx={{ width: 110, fontFamily: "monospace" }}>{p.date}</Typography>
-                  <Box sx={{ flexGrow: 1, height: 16, bgcolor: "#e0e0e0", borderRadius: 0.5, overflow: "hidden" }}>
+                  <Box sx={{ flexGrow: 1, height: 16, bgcolor: "var(--app-border2)", borderRadius: 0.5, overflow: "hidden" }}>
                     <Box sx={{ width: `${(p.count / maxCount) * 100}%`, height: "100%", bgcolor: "primary.main", transition: "width 120ms" }} />
                   </Box>
                   <TextField

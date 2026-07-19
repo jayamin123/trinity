@@ -245,12 +245,12 @@ function ScheduleRow({ s, onOpen }: { s: ScheduleSummary; onOpen: () => void }) 
     <Box sx={{
       borderLeft: 4, borderLeftColor: borderColor,
       border: 1, borderColor: "divider",
-      borderRadius: 1.5, p: 2, bgcolor: "#fafafa",
+      borderRadius: 1.5, p: 2, bgcolor: "var(--app-panel2)",
     }}>
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2} sx={{ mb: 1 }}>
         <Box>
           <Stack direction="row" alignItems="center" spacing={1}>
-            <Link href={`/flows/${s.flowId}`} target="_blank" style={{ color: "#1976d2", textDecoration: "none" }}>
+            <Link href={`/flows/${s.flowId}`} target="_blank" style={{ color: "var(--app-accent)", textDecoration: "none" }}>
               <Stack direction="row" alignItems="center" spacing={0.5}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{s.flowName}</Typography>
                 <OpenInNewIcon sx={{ fontSize: 14 }} />
@@ -288,14 +288,14 @@ function ScheduleRow({ s, onOpen }: { s: ScheduleSummary; onOpen: () => void }) 
         </Box>
       </Stack>
       <Typography variant="body2" sx={{ color: "text.secondary" }}>
-        {s.plan.product_name} <span style={{ color: "#888" }}>#{s.plan.product_id}</span>
+        {s.plan.product_name} <span style={{ color: "var(--app-faint)" }}>#{s.plan.product_id}</span>
         {" · "}
         ${s.plan.price.toFixed(2)}
         {" · "}
         MID {s.plan.cc_gateway_id}
       </Typography>
       {s.ccMessage && s.outcome === "failed" && (
-        <Box sx={{ mt: 1, p: 1, bgcolor: "#ffebee", borderRadius: 1, border: "1px solid", borderColor: "error.light" }}>
+        <Box sx={{ mt: 1, p: 1, bgcolor: "var(--app-bad-soft)", borderRadius: 1, border: "1px solid", borderColor: "error.light" }}>
           <Typography variant="caption">
             <b>Decline:</b> {s.ccMessage}
           </Typography>

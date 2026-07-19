@@ -152,7 +152,7 @@ export default function PlanTab({
                   <TableRow>
                     <TableCell colSpan={6} sx={{ p: 0, border: 0 }}>
                       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                        <Box sx={{ p: 2, pl: 6, bgcolor: "#fafafa" }}>
+                        <Box sx={{ p: 2, pl: 6, bgcolor: "var(--app-panel2)" }}>
                           <Table size="small">
                             <TableHead>
                               <TableRow>
@@ -186,7 +186,7 @@ export default function PlanTab({
                 </Fragment>
               );
             })}
-            <TableRow sx={{ bgcolor: "#f5f5f5" }}>
+            <TableRow sx={{ bgcolor: "var(--app-panel2)" }}>
               <TableCell padding="checkbox" />
               <TableCell><b>Total</b></TableCell>
               <TableCell align="right"><b>{totals.scheduled}</b></TableCell>
@@ -296,7 +296,7 @@ function ScheduleRow({
 
   if (editing) {
     return (
-      <TableRow sx={{ bgcolor: "#fff8e1" }}>
+      <TableRow sx={{ bgcolor: "var(--app-warn-soft)" }}>
         <TableCell>•••• {card.last4}</TableCell>
         <TableCell>{card.name}</TableCell>
         <TableCell>
@@ -355,7 +355,7 @@ function ScheduleRow({
         <TableCell>{dayjs.utc(card.scheduledFor).format("h:mm A")}</TableCell>
         <TableCell>
           {card.plan.product_name}{" "}
-          <span style={{ color: "#888" }}>${card.plan.price.toFixed(2)} · MID {card.plan.cc_gateway_id}</span>
+          <span style={{ color: "var(--app-faint)" }}>${card.plan.price.toFixed(2)} · MID {card.plan.cc_gateway_id}</span>
         </TableCell>
         <TableCell>
           <Chip

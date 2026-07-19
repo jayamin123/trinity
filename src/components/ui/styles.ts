@@ -40,16 +40,21 @@ export const UI_CSS = `
 .ui-panel.table{overflow:hidden;box-shadow:var(--app-shadow)}
 .ui-sect{font-size:var(--fs-sm);text-transform:uppercase;letter-spacing:.06em;color:var(--app-faint);font-weight:650}
 
-/* ---- KPI cards -------------------------------------------------------- */
+/* ---- KPI cards (icon tile + metric + optional delta) ------------------ */
 .ui-kpis{display:grid;grid-template-columns:repeat(var(--n,4),1fr);gap:var(--sp-3)}
-.ui-kpi{position:relative;overflow:hidden;background:var(--app-panel);border:1px solid var(--app-border);border-radius:var(--r-lg);padding:var(--sp-4);box-shadow:var(--app-shadow);transition:border-color var(--tr),transform var(--tr)}
+.ui-kpi{position:relative;background:var(--app-panel);border:1px solid var(--app-border);border-radius:var(--r-lg);padding:var(--sp-4);box-shadow:var(--app-shadow);transition:border-color var(--tr)}
 .ui-kpi:hover{border-color:var(--app-border2)}
-.ui-kpi .lab{font-size:var(--fs-sm);color:var(--app-muted);font-weight:550}
-.ui-kpi .val{font-size:28px;font-weight:680;letter-spacing:-.025em;margin-top:var(--sp-2)}
+.ui-kpi .top{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--sp-2)}
+.ui-kpi .lab{font-size:var(--fs-sm);color:var(--app-muted);font-weight:550;padding-top:3px}
+.ui-kpi .icon{width:32px;height:32px;flex:none;border-radius:var(--r-md);background:var(--app-accent-soft);color:var(--app-accent-ink);display:grid;place-items:center;font-size:15px;font-weight:700}
+.ui-kpi .icon.good{background:var(--app-good-soft);color:var(--app-good)} .ui-kpi .icon.bad{background:var(--app-bad-soft);color:var(--app-bad)}
+.ui-kpi .val{font-size:28px;font-weight:680;letter-spacing:-.025em;margin-top:var(--sp-3)}
 .ui-kpi .val small{font-size:15px;color:var(--app-faint);font-weight:600}
 .ui-kpi .val.good{color:var(--app-good)} .ui-kpi .val.bad{color:var(--app-bad)}
-.ui-spark{position:absolute;right:var(--sp-3);bottom:var(--sp-3);width:90px;height:32px}
-.ui-ring{position:absolute;right:var(--sp-4);top:var(--sp-4)}
+.ui-kpi .delta{font-size:var(--fs-tiny);font-weight:650;margin-top:var(--sp-2)}
+.ui-kpi .delta.up{color:var(--app-good)} .ui-kpi .delta.down{color:var(--app-muted)}
+/* standalone trend visuals (used outside KPI cards) */
+.ui-spark{width:90px;height:32px} .ui-ring{display:block}
 
 /* ---- buttons ---------------------------------------------------------- */
 .ui-btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);box-sizing:border-box;

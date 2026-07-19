@@ -1,18 +1,23 @@
 import type { ReactNode } from "react";
 
-/* KPI card with an optional inline visual (sparkline / ring / anything). */
-export function KpiCard({ label, value, unit, tone, visual }: {
+/* KPI card — icon tile + metric + optional trend delta.
+   `delta` is optional: only pass it where real period-over-period data exists. */
+export function KpiCard({ label, value, unit, tone, icon, delta }: {
   label: string;
   value: ReactNode;
   unit?: string;
   tone?: "good" | "bad";
-  visual?: ReactNode;
+  icon?: ReactNode;
+  delta?: { dir: "up" | "down"; text: string };
 }) {
   return (
     <div className="ui-kpi">
-      <div className="lab">{label}</div>
+      <div className="top">
+        <div className="lab">{label}</div>
+        {icon != null && <div className={`icon${tone ? " " + tone : ""}`}>{icon}</div>}
+      </div>
       <div className={`val${tone ? " " + tone : ""}`}>{value}{unit && <small>{unit}</small>}</div>
-      {visual}
+      {delta && <div className={`delta ${delta.dir}`}>{delta.dir === "up" ? "▲" : "▼"} {delta.text}</div>}
     </div>
   );
 }

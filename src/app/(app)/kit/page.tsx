@@ -4,7 +4,7 @@ import {
   PageHeader, Panel, SectionLabel,
   Button, IconButton,
   Pill, Tag, MidChip, Badge, CardCell, Mono,
-  KpiCard, KpiGrid, Sparkline, RingGauge,
+  KpiCard, KpiGrid,
   FilterBar, Segmented, SelectChip, CheckChip, SearchInput,
   Field, SelectField, Tabs,
   DataTable, type Column,
@@ -96,10 +96,10 @@ export default function KitPage() {
 
       <Group title="KPI cards">
         <KpiGrid n={4}>
-          <KpiCard label="Charges (ledger)" value="443" visual={<Sparkline data={[3, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15]} />} />
-          <KpiCard label="Approval rate" value="99.3" unit="%" visual={<RingGauge pct={99.3} />} />
-          <KpiCard label="Captured volume" value="$2,353.50" />
-          <KpiCard label="Declined" value="3" tone="bad" />
+          <KpiCard label="Charges (ledger)" value="443" icon="⚡" delta={{ dir: "up", text: "12% vs last week" }} />
+          <KpiCard label="Approval rate" value="99.3" unit="%" icon="◎" delta={{ dir: "up", text: "0.4 pts" }} />
+          <KpiCard label="Captured volume" value="$2,353.50" icon="$" delta={{ dir: "up", text: "$180" }} />
+          <KpiCard label="Declined" value="3" tone="bad" icon="!" delta={{ dir: "down", text: "2 fewer" }} />
         </KpiGrid>
       </Group>
 

@@ -24,8 +24,8 @@ export type Tokens = {
 export const THEMES: Record<ThemeName, Tokens> = {
   slate: {
     label: "Slate", mode: "light",
-    bg: "#f4f7f9", grad: "radial-gradient(1200px 600px at 50% -20%, #ffffff 0%, transparent 60%)",
-    panel: "#ffffff", panel2: "#f7f9fb", hover: "#f1f5f8", border: "#e7ebef", border2: "#dbe1e7",
+    bg: "#ffffff", grad: "none",
+    panel: "#ffffff", panel2: "#f6f8fa", hover: "#f3f5f8", border: "#e6e9ee", border2: "#d7dce3",
     text: "#1a1c24", muted: "#5d6577", faint: "#949bad",
     accent: "#5a56e0", accentInk: "#4b47d6", accentSoft: "rgba(90,86,224,.09)", accentOn: "#ffffff",
     good: "#17915f", goodSoft: "rgba(23,145,95,.12)", bad: "#d23b41", badSoft: "rgba(210,59,65,.12)",

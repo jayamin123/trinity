@@ -51,17 +51,21 @@ export function CheckChip({ label, checked, onChange }: { label: string; checked
   );
 }
 
-/* Search input styled as a filter control. */
+/* Search input styled as a filter chip (icon + borderless input). */
 export function SearchInput({ value, onChange, placeholder = "Search…", width }: {
   value: string; onChange: (v: string) => void; placeholder?: string; width?: number;
 }) {
   return (
-    <input
-      className="ui-input"
-      style={{ width: width ?? 180, flex: "none" }}
-      placeholder={placeholder}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
+    <div className="ui-search">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <circle cx="7" cy="7" r="4.5" /><line x1="10.5" y1="10.5" x2="14.5" y2="14.5" strokeLinecap="round" />
+      </svg>
+      <input
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={width ? { width } : undefined}
+      />
+    </div>
   );
 }

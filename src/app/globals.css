@@ -1,0 +1,207 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+:root {
+  --background: 0 0% 100%;
+  --foreground: 228 16% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 228 16% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 228 16% 12%;
+  --primary: 242 69% 61%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 29% 97%;
+  --secondary-foreground: 228 16% 12%;
+  --muted: 210 29% 97%;
+  --muted-foreground: 222 12% 42%;
+  --accent: 216 26% 96%;
+  --accent-foreground: 228 16% 12%;
+  --destructive: 358 63% 53%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 218 19% 92%;
+  --input: 218 19% 92%;
+  --ring: 242 69% 61%;
+  --good: 155 73% 33%;
+  --warn: 35 75% 39%;
+  --info: 213 74% 52%;
+  --faint: 223 13% 63%;
+  --brand-ink: 242 64% 56%;
+  --border-strong: 215 18% 87%;
+  --glyph-text: 242 69% 61%;
+  --glyph-bg: linear-gradient(135deg,#e7e8f5,#d8daf0);
+  --shadow: 0 1px 2px rgba(20,22,40,.04),0 10px 30px -16px rgba(20,22,40,.14);
+  --grad: none;
+  --radius: 0.7rem;
+}
+
+:root[data-theme="slate"] {
+  --background: 0 0% 100%;
+  --foreground: 228 16% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 228 16% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 228 16% 12%;
+  --primary: 242 69% 61%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 29% 97%;
+  --secondary-foreground: 228 16% 12%;
+  --muted: 210 29% 97%;
+  --muted-foreground: 222 12% 42%;
+  --accent: 216 26% 96%;
+  --accent-foreground: 228 16% 12%;
+  --destructive: 358 63% 53%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 218 19% 92%;
+  --input: 218 19% 92%;
+  --ring: 242 69% 61%;
+  --good: 155 73% 33%;
+  --warn: 35 75% 39%;
+  --info: 213 74% 52%;
+  --faint: 223 13% 63%;
+  --brand-ink: 242 64% 56%;
+  --border-strong: 215 18% 87%;
+  --glyph-text: 242 69% 61%;
+  --glyph-bg: linear-gradient(135deg,#e7e8f5,#d8daf0);
+  --shadow: 0 1px 2px rgba(20,22,40,.04),0 10px 30px -16px rgba(20,22,40,.14);
+  --grad: none;
+  --radius: 0.7rem;
+}
+
+:root[data-theme="midnight"] {
+  --background: 230 20% 6%;
+  --foreground: 231 23% 94%;
+  --card: 233 18% 10%;
+  --card-foreground: 231 23% 94%;
+  --popover: 233 18% 10%;
+  --popover-foreground: 231 23% 94%;
+  --primary: 242 100% 75%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 229 19% 11%;
+  --secondary-foreground: 231 23% 94%;
+  --muted: 229 19% 11%;
+  --muted-foreground: 222 13% 65%;
+  --accent: 231 19% 13%;
+  --accent-foreground: 231 23% 94%;
+  --destructive: 358 85% 65%;
+  --destructive-foreground: 0 0% 100%;
+  --border: NaN NaN% NaN%;
+  --input: NaN NaN% NaN%;
+  --ring: 242 100% 75%;
+  --good: 155 59% 50%;
+  --warn: 37 75% 60%;
+  --info: 212 95% 67%;
+  --faint: 224 9% 46%;
+  --brand-ink: 242 100% 80%;
+  --border-strong: NaN NaN% NaN%;
+  --glyph-text: 237 100% 89%;
+  --glyph-bg: linear-gradient(135deg,#2b2f45,#3a4066);
+  --shadow: 0 1px 0 rgba(255,255,255,.02),0 22px 50px -28px rgba(0,0,0,.8);
+  --grad: radial-gradient(1100px 560px at 84% -12%, #191a2b 0%, transparent 58%);
+  --radius: 0.7rem;
+}
+
+:root[data-theme="nord"] {
+  --background: 220 17% 17%;
+  --foreground: 218 27% 94%;
+  --card: 220 16% 22%;
+  --card-foreground: 218 27% 94%;
+  --popover: 220 16% 22%;
+  --popover-foreground: 218 27% 94%;
+  --primary: 193 43% 67%;
+  --primary-foreground: 220 16% 22%;
+  --secondary: 219 18% 25%;
+  --secondary-foreground: 218 27% 94%;
+  --muted: 219 18% 25%;
+  --muted-foreground: 217 17% 75%;
+  --accent: 222 16% 28%;
+  --accent-foreground: 218 27% 94%;
+  --destructive: 354 42% 56%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 222 16% 28%;
+  --input: 222 16% 28%;
+  --ring: 193 43% 67%;
+  --good: 92 28% 65%;
+  --warn: 40 71% 73%;
+  --info: 210 34% 63%;
+  --faint: 221 10% 53%;
+  --brand-ink: 179 25% 65%;
+  --border-strong: 220 16% 36%;
+  --glyph-text: 193 43% 67%;
+  --glyph-bg: linear-gradient(135deg,#3b4252,#434c5e);
+  --shadow: 0 1px 0 rgba(255,255,255,.02),0 22px 50px -28px rgba(0,0,0,.6);
+  --grad: radial-gradient(1100px 560px at 84% -12%, #2e3440 0%, transparent 58%);
+  --radius: 0.7rem;
+}
+
+:root[data-theme="rose"] {
+  --background: 249 22% 12%;
+  --foreground: 245 50% 91%;
+  --card: 247 23% 15%;
+  --card-foreground: 245 50% 91%;
+  --popover: 247 23% 15%;
+  --popover-foreground: 245 50% 91%;
+  --primary: 267 57% 78%;
+  --primary-foreground: 249 22% 12%;
+  --secondary: 248 25% 18%;
+  --secondary-foreground: 245 50% 91%;
+  --muted: 248 25% 18%;
+  --muted-foreground: 247 28% 81%;
+  --accent: 247 24% 20%;
+  --accent-foreground: 245 50% 91%;
+  --destructive: 343 76% 68%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 248 25% 18%;
+  --input: 248 25% 18%;
+  --ring: 267 57% 78%;
+  --good: 189 43% 73%;
+  --warn: 35 88% 72%;
+  --info: 197 49% 38%;
+  --faint: 248 15% 61%;
+  --brand-ink: 267 61% 83%;
+  --border-strong: 249 15% 28%;
+  --glyph-text: 267 57% 78%;
+  --glyph-bg: linear-gradient(135deg,#26233a,#403d52);
+  --shadow: 0 1px 0 rgba(255,255,255,.02),0 22px 50px -28px rgba(0,0,0,.7);
+  --grad: radial-gradient(1100px 560px at 84% -12%, #1f1d2e 0%, transparent 58%);
+  --radius: 0.7rem;
+}
+
+:root[data-theme="mint"] {
+  --background: 160 18% 97%;
+  --foreground: 158 20% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 158 20% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 158 20% 11%;
+  --primary: 175 84% 32%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 165 29% 97%;
+  --secondary-foreground: 158 20% 11%;
+  --muted: 165 29% 97%;
+  --muted-foreground: 160 11% 38%;
+  --accent: 157 31% 95%;
+  --accent-foreground: 158 20% 11%;
+  --destructive: 358 63% 53%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 157 17% 91%;
+  --input: 157 17% 91%;
+  --ring: 175 84% 32%;
+  --good: 142 72% 29%;
+  --warn: 26 90% 37%;
+  --info: 213 74% 52%;
+  --faint: 159 10% 60%;
+  --brand-ink: 175 84% 27%;
+  --border-strong: 160 17% 86%;
+  --glyph-text: 175 84% 32%;
+  --glyph-bg: linear-gradient(135deg,#dcefe9,#cfe8e0);
+  --shadow: 0 1px 2px rgba(16,30,26,.04),0 10px 30px -16px rgba(16,30,26,.14);
+  --grad: radial-gradient(1100px 560px at 84% -12%, #e6f2ee 0%, transparent 58%);
+  --radius: 0.7rem;
+}
+
+* { @apply border-border; }
+body { @apply bg-background text-foreground; background-image: var(--grad); background-attachment: fixed; }
+html { -webkit-font-smoothing: antialiased; }
+}

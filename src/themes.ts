@@ -94,8 +94,18 @@ function vars(t: Tokens): string {
 /** Server-injected stylesheet: default vars + one block per theme + body bg. */
 export function themeCss(): string {
   const perTheme = THEME_NAMES.map((n) => `:root[data-theme="${n}"]{${vars(THEMES[n])}}`).join("");
+  // The MUI X DataGrid doesn't fully follow the palette (esp. its scroller/rows),
+  // so theme it explicitly from the same tokens.
+  const dataGrid =
+    `.MuiDataGrid-root{background:var(--app-panel);border:none;color:var(--app-text)}` +
+    `.MuiDataGrid-main,.MuiDataGrid-virtualScroller,.MuiDataGrid-row{background:var(--app-panel)}` +
+    `.MuiDataGrid-columnHeaders,.MuiDataGrid-columnHeader,.MuiDataGrid-toolbarContainer,.MuiDataGrid-footerContainer{background:var(--app-panel2)!important;border-color:var(--app-border)!important}` +
+    `.MuiDataGrid-cell,.MuiDataGrid-columnHeaders,.MuiDataGrid-columnHeader,.MuiDataGrid-filler,.MuiDataGrid-footerContainer{border-color:var(--app-border)!important}` +
+    `.MuiDataGrid-row:hover{background:var(--app-hover)!important}` +
+    `.MuiDataGrid-columnSeparator{color:var(--app-border)}`;
   return `:root{${vars(THEMES[DEFAULT_THEME])}}${perTheme}` +
-    `body{background:var(--app-bg);background-image:var(--app-grad);background-attachment:fixed;color:var(--app-text)}`;
+    `body{background:var(--app-bg);background-image:var(--app-grad);background-attachment:fixed;color:var(--app-text)}` +
+    dataGrid;
 }
 
 /** MUI theme built from a token set — so MUI components adopt the same colors. */

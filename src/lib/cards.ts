@@ -36,36 +36,73 @@ export async function pullCardsFromPool(limit: number) {
 // The single `?` inside the HAVING is the flowId — pass "" for a brand-new flow.
 // ---------------------------------------------------------------------------
 const LIVE_CHARGE = `(s.status IN ('pending','processing') OR (s.status = 'fired' AND s.success = 1))`;
-const AVAILABLE_HAVING = `
-  HAVING
-    ( json_extract(c.card_data,'$.amount') = 'unlim'
-      AND SUM(CASE WHEN s.flow_id = ? THEN 1 ELSE 0 END) = 0 )
-    OR
-    ( json_extract(c.card_data,'$.amount') IS NULL
-      AND COALESCE(SUM(CASE WHEN ${LIVE_CHARGE} THEN 1 ELSE 0 END), 0) = 0 )
-    OR
-    ( typeof(json_extract(c.card_data,'$.amount')) IN ('integer','real')
+
+// A card belongs to exactly one "set": unlim (draws on a shared account), or
+// balance (a numbered top-up card, OR an untagged single-use card). The picker
+// in Add Cards / New Flow chooses which set to pull from so unlimited cards can
+// never be scheduled into a balance flow by accident (and vice-versa).
+export type CardSet = "balance" | "unlim" | "any";
+
+//  unlim: not already scheduled in THIS flow (once per campaign). Only this
+//  branch references the flowId `?`.
+const UNLIM_BRANCH = `( json_extract(c.card_data,'$.amount') = 'unlim'
+      AND SUM(CASE WHEN s.flow_id = ? THEN 1 ELSE 0 END) = 0 )`;
+//  untagged: single-use, holding no live charge.
+const UNTAGGED_BRANCH = `( json_extract(c.card_data,'$.amount') IS NULL
+      AND COALESCE(SUM(CASE WHEN ${LIVE_CHARGE} THEN 1 ELSE 0 END), 0) = 0 )`;
+//  numbered: remaining balance (start − live charge prices) > 0.
+const NUMBERED_BRANCH = `( typeof(json_extract(c.card_data,'$.amount')) IN ('integer','real')
       AND CAST(json_extract(c.card_data,'$.amount') AS REAL)
           - COALESCE(SUM(CASE WHEN ${LIVE_CHARGE} THEN CAST(json_extract(s.fire_plan,'$.price') AS REAL) ELSE 0 END), 0)
           > 0 )`;
-const AVAILABLE_SELECT = `SELECT c.id FROM cards c LEFT JOIN schedules s ON s.card_id = c.id GROUP BY c.id ${AVAILABLE_HAVING}`;
 
-/** Cards that still have balance for a flow, oldest first. Pass the flow's id so
- *  an unlimited card already in that flow is excluded; omit ("") for createFlow. */
-export async function pullAvailableForFlow(limit: number, flowId: string = ""): Promise<{ id: string }[]> {
-  return db.$queryRawUnsafe<{ id: string }[]>(
-    `${AVAILABLE_SELECT} ORDER BY c.created_at ASC LIMIT ?`,
-    flowId, limit,
-  );
+/** Availability SELECT for a card set. `usesFlowId` is true only when the unlim
+ *  branch is present (the sole branch that references the flowId `?` param). */
+function availableSelect(set: CardSet): { sql: string; usesFlowId: boolean } {
+  const branches: string[] = [];
+  const usesFlowId = set === "unlim" || set === "any";
+  if (set === "unlim" || set === "any") branches.push(UNLIM_BRANCH);
+  if (set === "balance" || set === "any") branches.push(UNTAGGED_BRANCH, NUMBERED_BRANCH);
+  return {
+    sql: `SELECT c.id FROM cards c LEFT JOIN schedules s ON s.card_id = c.id GROUP BY c.id HAVING ${branches.join("\n OR \n")}`,
+    usesFlowId,
+  };
 }
 
-/** How many cards are available to a flow (same rule as pullAvailableForFlow). */
-export async function countAvailableForFlow(flowId: string = ""): Promise<number> {
+/** Cards available to a flow from the given set, oldest first. Pass the flow's id
+ *  so an unlimited card already in that flow is excluded; omit ("") for createFlow. */
+export async function pullAvailableForFlow(limit: number, flowId: string = "", set: CardSet = "any"): Promise<{ id: string }[]> {
+  const { sql, usesFlowId } = availableSelect(set);
+  const params = usesFlowId ? [flowId, limit] : [limit];
+  return db.$queryRawUnsafe<{ id: string }[]>(`${sql} ORDER BY c.created_at ASC LIMIT ?`, ...params);
+}
+
+/** How many cards are available to a flow from a set (same rule as pull). */
+export async function countAvailableForFlow(flowId: string = "", set: CardSet = "any"): Promise<number> {
+  const { sql, usesFlowId } = availableSelect(set);
+  const params = usesFlowId ? [flowId] : [];
+  const r = await db.$queryRawUnsafe<{ n: number }[]>(`SELECT COUNT(*) AS n FROM (${sql})`, ...params);
+  return Number(r[0]?.n ?? 0);
+}
+
+/** Available counts split by set — powers the "Pull from" picker. */
+export async function countAvailableBySet(flowId: string = ""): Promise<{ balance: number; unlim: number }> {
+  const [balance, unlim] = await Promise.all([
+    countAvailableForFlow(flowId, "balance"),
+    countAvailableForFlow(flowId, "unlim"),
+  ]);
+  return { balance, unlim };
+}
+
+/** Which set a flow is currently built from — used to default the picker. A flow
+ *  with ANY schedule on an unlim card is an "unlim" flow; otherwise "balance". */
+export async function flowCardSet(flowId: string): Promise<"balance" | "unlim"> {
   const r = await db.$queryRawUnsafe<{ n: number }[]>(
-    `SELECT COUNT(*) AS n FROM (${AVAILABLE_SELECT})`,
+    `SELECT COUNT(*) AS n FROM schedules s JOIN cards c ON c.id = s.card_id
+     WHERE s.flow_id = ? AND json_extract(c.card_data,'$.amount') = 'unlim'`,
     flowId,
   );
-  return Number(r[0]?.n ?? 0);
+  return Number(r[0]?.n ?? 0) > 0 ? "unlim" : "balance";
 }
 
 /** Human-facing fields flattened out of a card's `card_data` JSON blob.

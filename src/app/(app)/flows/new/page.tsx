@@ -1,14 +1,14 @@
 import { Box, Typography, Alert, Card, CardContent } from "@mui/material";
 import { db } from "@/lib/db";
-import { countAvailableForFlow } from "@/lib/cards";
+import { countAvailableBySet } from "@/lib/cards";
 import { parseFlowSettings } from "@/lib/flows";
 import NewFlowForm, { type FlowSource } from "./NewFlowForm";
 
 export default async function NewFlowPage() {
-  const [account, existingFlows, availableCount] = await Promise.all([
+  const [account, existingFlows, availableCounts] = await Promise.all([
     db.account.findFirst(),
     db.flow.findMany({ orderBy: { createdAt: "desc" }, take: 20 }),
-    countAvailableForFlow(),
+    countAvailableBySet(),
   ]);
 
   // Existing flows act as the "preset library" — pick one, tweak, submit.
@@ -33,11 +33,11 @@ export default async function NewFlowPage() {
       </Typography>
 
       {!account && <Alert severity="warning" sx={{ mb: 2 }}>Add CheckoutChamp credentials in Settings first.</Alert>}
-      {availableCount === 0 && <Alert severity="warning" sx={{ mb: 2 }}>No cards available — upload a CSV first.</Alert>}
+      {availableCounts.balance + availableCounts.unlim === 0 && <Alert severity="warning" sx={{ mb: 2 }}>No cards available — upload a CSV first.</Alert>}
 
       <Card>
         <CardContent>
-          <NewFlowForm sources={sources} availableCount={availableCount} />
+          <NewFlowForm sources={sources} availableBalance={availableCounts.balance} availableUnlim={availableCounts.unlim} />
         </CardContent>
       </Card>
     </Box>

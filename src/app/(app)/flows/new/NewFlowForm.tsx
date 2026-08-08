@@ -1,6 +1,7 @@
 "use client";
 import {
   TextField, MenuItem, Button, Stack, Box, Typography, Divider, Alert, LinearProgress, InputAdornment, Table, TableHead, TableRow, TableCell, TableBody,
+  ToggleButton, ToggleButtonGroup,
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { createFlow, previewSchedule, listFlowGateways, listFlowCampaigns, listFlowProducts } from "./actions";
@@ -26,9 +27,13 @@ type PreviewDay = { date: string; count: number };
 const today = dayjs.utc(nowBkk()).format("YYYY-MM-DD");
 const inSevenDays = dayjs.utc(nowBkk()).add(7, "day").format("YYYY-MM-DD");
 
-export default function NewFlowForm({ sources, availableCount }: { sources: FlowSource[]; availableCount: number }) {
+export default function NewFlowForm({ sources, availableBalance, availableUnlim }: { sources: FlowSource[]; availableBalance: number; availableUnlim: number }) {
   const [name, setName] = useState("");
   const [sourceFlowId, setSourceFlowId] = useState("");
+  // Which card set this flow draws from. New flows default to Remaining balance;
+  // pick Unlimited for the Slash subscription flows.
+  const [cardSet, setCardSet] = useState<"balance" | "unlim">("balance");
+  const availableCount = cardSet === "unlim" ? availableUnlim : availableBalance;
 
   // CC option lists, fetched live from CheckoutChamp.
   const [gateways, setGateways] = useState<Opt[]>([]);
@@ -187,6 +192,7 @@ export default function NewFlowForm({ sources, availableCount }: { sources: Flow
         ccCampaign: campaign,
         productMix,
         perDay: preview,
+        cardSet,
       });
     } catch (err) {
       if (err && typeof err === "object" && "digest" in err && String((err as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")) throw err;
@@ -299,9 +305,22 @@ export default function NewFlowForm({ sources, availableCount }: { sources: Flow
                 </TableBody>
               </Table>
             )}
-            <Typography variant="caption" color="text.secondary">
-              {availableCount.toLocaleString()} cards available.
-            </Typography>
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5, fontWeight: 600 }}>
+                Pull cards from
+              </Typography>
+              <ToggleButtonGroup
+                exclusive size="small" value={cardSet}
+                onChange={(_, v) => { if (v) { setCardSet(v); setPreview(null); setError(null); } }}
+              >
+                <ToggleButton value="balance" sx={{ textTransform: "none", px: 2 }}>
+                  Remaining balance&nbsp;·&nbsp;<b>{availableBalance.toLocaleString()}</b>
+                </ToggleButton>
+                <ToggleButton value="unlim" sx={{ textTransform: "none", px: 2 }}>
+                  Unlimited&nbsp;·&nbsp;<b>{availableUnlim.toLocaleString()}</b>
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
           </Box>
         )}
 

@@ -3,6 +3,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Stack,
   Box, Typography, Alert, LinearProgress, Table, TableHead, TableRow, TableCell,
   TableBody, InputAdornment, IconButton, Checkbox, Menu, MenuItem,
+  ToggleButton, ToggleButtonGroup,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import CreditCardIcon from "@mui/icons-material/CreditCard";
@@ -28,13 +29,15 @@ function productNameNumber(name: string): number | null {
 }
 
 export default function AddCardsDialog({
-  flowId, flowName, availableProducts, poolCount, defaultStart, defaultEnd,
+  flowId, flowName, availableProducts, poolBalance, poolUnlim, defaultSet, defaultStart, defaultEnd,
   currentMix, gatewayId, campaignName,
 }: {
   flowId: string;
   flowName: string;
   availableProducts: Product[];
-  poolCount: number;
+  poolBalance: number;
+  poolUnlim: number;
+  defaultSet: "balance" | "unlim";
   defaultStart: string;
   defaultEnd: string;
   currentMix: string; // e.g. "5× Pet Mop Ball, 3× Wall Adaptor"
@@ -42,6 +45,11 @@ export default function AddCardsDialog({
   campaignName: string;
 }) {
   const [open, setOpen] = useState(false);
+  // Which card set to draw from. Defaults to whatever the flow already uses, so
+  // an unlimited flow (Slash) defaults to Unlimited and a balance flow to Balance.
+  const [cardSet, setCardSet] = useState<"balance" | "unlim">(defaultSet);
+  // Available count for the SELECTED set — everything below caps against this.
+  const poolCount = cardSet === "unlim" ? poolUnlim : poolBalance;
   // Seeded from the server prop, but kept in state so the "Refresh from CC"
   // button can update the picker live without reloading the page.
   const [products, setProducts] = useState<Product[]>(availableProducts);
@@ -215,7 +223,7 @@ export default function AddCardsDialog({
 
     setSubmitting(true);
     try {
-      await addCardsToFlow({ flowId, productMix, perDay: preview });
+      await addCardsToFlow({ flowId, productMix, perDay: preview, cardSet });
       setOpen(false);
       reset();
     } catch (err) {
@@ -229,7 +237,7 @@ export default function AddCardsDialog({
 
   return (
     <>
-      <Button variant="contained" onClick={() => { setOpen(true); reset(); }} disabled={poolCount === 0}>
+      <Button variant="contained" onClick={() => { setOpen(true); reset(); }} disabled={poolBalance + poolUnlim === 0}>
         Add cards
       </Button>
       <Dialog open={open} onClose={() => !submitting && setOpen(false)} maxWidth="lg" fullWidth>
@@ -248,7 +256,7 @@ export default function AddCardsDialog({
                 icon: <CreditCardIcon />,
                 label: "Pool",
                 value: `${poolCount.toLocaleString()} cards`,
-                subtitle: "available",
+                subtitle: cardSet === "unlim" ? "unlimited available" : "balance available",
               },
               {
                 icon: <BoltIcon />,
@@ -269,6 +277,27 @@ export default function AddCardsDialog({
                 subtitle: campaignName,
               },
             ]} />
+
+            {/* Which card set to draw from — prevents pulling UNLIM cards into a
+                balance flow (and vice-versa). Defaults to match the flow. */}
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5, fontWeight: 600 }}>
+                Pull cards from
+              </Typography>
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={cardSet}
+                onChange={(_, v) => { if (v) { setCardSet(v); setPreview(null); setError(null); } }}
+              >
+                <ToggleButton value="balance" sx={{ textTransform: "none", px: 2 }}>
+                  Remaining balance&nbsp;·&nbsp;<b>{poolBalance.toLocaleString()}</b>
+                </ToggleButton>
+                <ToggleButton value="unlim" sx={{ textTransform: "none", px: 2 }}>
+                  Unlimited&nbsp;·&nbsp;<b>{poolUnlim.toLocaleString()}</b>
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
 
             <SectionCard
               title="Pick products"

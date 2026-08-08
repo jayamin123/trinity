@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { Box, Typography, Chip, Stack, Button } from "@mui/material";
 import { db } from "@/lib/db";
 import { parseFlowSettings, getFlowDayRollup, summarizeProductMix } from "@/lib/flows";
-import { countAvailableForFlow } from "@/lib/cards";
+import { countAvailableBySet, flowCardSet } from "@/lib/cards";
 import { formatBkk, nowBkk } from "@/lib/bkk";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -36,7 +36,7 @@ export default async function FlowDetailPage({
 
   const settings = parseFlowSettings(flow.flowSettings);
 
-  const [rollup, succeededCount, firedCount, scheduleRows, poolCount, lastScheduled, usedCount, pendingCount, processingCount, nextPending, lastFired] = await Promise.all([
+  const [rollup, succeededCount, firedCount, scheduleRows, poolCounts, lastScheduled, usedCount, pendingCount, processingCount, nextPending, lastFired, cardSetDefault] = await Promise.all([
     getFlowDayRollup(id),
     db.schedule.count({ where: { flowId: id, success: true } }),
     db.schedule.count({ where: { flowId: id, status: "fired" } }),
@@ -48,7 +48,7 @@ export default async function FlowDetailPage({
           include: { card: { select: { panLast4: true, cardData: true } } },
         })
       : Promise.resolve([]),
-    countAvailableForFlow(id),
+    countAvailableBySet(id),
     db.schedule.findFirst({
       where: { flowId: id },
       orderBy: { scheduledFor: "desc" },
@@ -67,6 +67,7 @@ export default async function FlowDetailPage({
       orderBy: { firedAt: "desc" },
       select: { firedAt: true },
     }),
+    flowCardSet(id),
   ]);
   const isFresh = usedCount === 0;
   const failedCount = firedCount - succeededCount;
@@ -128,7 +129,9 @@ export default async function FlowDetailPage({
               flowId={id}
               flowName={flow.name}
               availableProducts={settings.cc_products}
-              poolCount={poolCount}
+              poolBalance={poolCounts.balance}
+              poolUnlim={poolCounts.unlim}
+              defaultSet={cardSetDefault}
               defaultStart={addDefaultStart}
               defaultEnd={addDefaultEnd}
               currentMix={summarizeProductMix(settings.cc_products)}

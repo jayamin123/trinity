@@ -4,7 +4,7 @@ import {
   parseFlowSettings, parseFirePlan,
   type FirePlan, type CCProduct,
 } from "@/lib/flows";
-import { pullAvailableForFlow } from "@/lib/cards";
+import { pullAvailableForFlow, type CardSet } from "@/lib/cards";
 import { stratifiedTimesForDay, distributeShaped, type DistributionShape } from "@/lib/schedule";
 import { nowBkk, calendarDateBkk } from "@/lib/bkk";
 import { listProducts as listCCProducts, listGateways, listCampaigns as listCCCampaigns } from "@/lib/checkoutchamp";
@@ -85,6 +85,8 @@ export type AddCardsInput = {
   /** Per-product mix the user picked for THIS batch — same shape as create flow. */
   productMix: Array<{ product_id: string; product_name: string; price: number; count: number }>;
   perDay: { date: string; count: number }[];
+  /** Which card set to draw from: "balance" (numbered/untagged) or "unlim". */
+  cardSet?: CardSet;
 };
 
 /** Append more schedules to an existing flow.
@@ -115,9 +117,11 @@ export async function addCardsToFlow(input: AddCardsInput) {
     throw new Error(`Per-day schedule sums to ${perDaySum} but mix sums to ${totalToAdd}`);
   }
 
-  const cards = await pullAvailableForFlow(totalToAdd, input.flowId);
+  const set: CardSet = input.cardSet ?? "any";
+  const cards = await pullAvailableForFlow(totalToAdd, input.flowId, set);
   if (cards.length < totalToAdd) {
-    throw new Error(`Only ${cards.length} cards available (with balance, not already in this flow) — need ${totalToAdd}`);
+    const label = set === "unlim" ? "unlimited" : set === "balance" ? "remaining-balance" : "available";
+    throw new Error(`Only ${cards.length} ${label} cards available (not already in this flow) — need ${totalToAdd}`);
   }
 
   // Shuffled (card, plan) sequence — same logic as createFlow.

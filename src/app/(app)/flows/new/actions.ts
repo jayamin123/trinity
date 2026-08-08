@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { pullAvailableForFlow } from "@/lib/cards";
+import { pullAvailableForFlow, type CardSet } from "@/lib/cards";
 import { randomDailyCounts, stratifiedTimesForDay } from "@/lib/schedule";
 import { nowBkk } from "@/lib/bkk";
 import { type FirePlan, type FlowSettings } from "@/lib/flows";
@@ -45,6 +45,8 @@ export type CreateFlowInput = {
   productMix: ProductPick[];
   /** Per-day card counts (after randomized distribution). Length = days in window. */
   perDay: { date: string; count: number }[];
+  /** Which card set to draw from: "balance" (numbered/untagged) or "unlim". */
+  cardSet?: CardSet;
 };
 
 export async function previewSchedule(totalCards: number, startDate: string, endDate: string) {
@@ -73,10 +75,12 @@ export async function createFlow(input: CreateFlowInput) {
     throw new Error(`Per-day schedule sums to ${perDaySum} but product mix sums to ${totalCards}`);
   }
 
-  // Pull cards that still have balance. Brand-new flow, so no flowId filter.
-  const cards = await pullAvailableForFlow(totalCards);
+  // Pull cards from the chosen set. Brand-new flow, so no flowId filter.
+  const set: CardSet = input.cardSet ?? "any";
+  const cards = await pullAvailableForFlow(totalCards, "", set);
   if (cards.length < totalCards) {
-    throw new Error(`Only ${cards.length} cards available (with balance) — need ${totalCards}`);
+    const label = set === "unlim" ? "unlimited" : set === "balance" ? "remaining-balance" : "available";
+    throw new Error(`Only ${cards.length} ${label} cards available — need ${totalCards}`);
   }
 
   // Build a per-card fire_plan list shuffled across products so the

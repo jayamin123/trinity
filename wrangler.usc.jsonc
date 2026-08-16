@@ -1,0 +1,18 @@
+{
+  // US Commerce Group deployment. Account admin@uscommercegroup.com.
+  // Deploy with: wrangler deploy -c wrangler.usc.jsonc  (while logged into USC)
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "trinity-flows",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-03-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "binding": "ASSETS", "directory": ".open-next/assets" },
+  "vars": { "CLOUDFLARE_WORKER": "1" },
+  "routes": [{ "pattern": "flows.uscommercegroup.com", "custom_domain": true }],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "trinity-flows", "database_id": "ee38af2d-30af-47b2-be1a-b992974d7c67" }
+  ],
+  "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "trinity-uploads" }],
+  "triggers": { "crons": ["* * * * *"] },
+  "observability": { "enabled": true }
+}

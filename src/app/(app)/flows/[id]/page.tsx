@@ -12,7 +12,8 @@ import PlanTab from "./PlanTab";
 import ActivityTab from "./ActivityTab";
 import AddCardsDialog from "./AddCardsDialog";
 import EditFlowModal from "./EditFlowModal";
-import { pauseFlow, resumeFlow } from "./actions";
+import { pauseFlow, countOverduePending } from "./actions";
+import ResumeButton from "./ResumeButton";
 
 const STATUS_COLOR: Record<string, "success" | "warning" | "default"> = {
   active: "success", paused: "warning", completed: "default",
@@ -36,7 +37,7 @@ export default async function FlowDetailPage({
 
   const settings = parseFlowSettings(flow.flowSettings);
 
-  const [rollup, succeededCount, firedCount, scheduleRows, poolCounts, lastScheduled, usedCount, pendingCount, processingCount, nextPending, lastFired, cardSetDefault] = await Promise.all([
+  const [rollup, succeededCount, firedCount, scheduleRows, poolCounts, lastScheduled, usedCount, pendingCount, processingCount, nextPending, lastFired, cardSetDefault, overdueCount] = await Promise.all([
     getFlowDayRollup(id),
     db.schedule.count({ where: { flowId: id, success: true } }),
     db.schedule.count({ where: { flowId: id, status: "fired" } }),
@@ -68,6 +69,7 @@ export default async function FlowDetailPage({
       select: { firedAt: true },
     }),
     flowCardSet(id),
+    countOverduePending(id),
   ]);
   const isFresh = usedCount === 0;
   const failedCount = firedCount - succeededCount;
@@ -145,9 +147,7 @@ export default async function FlowDetailPage({
             </form>
           )}
           {settings.lifecycle.status === "paused" && (
-            <form action={resumeFlow.bind(null, id)}>
-              <Button type="submit" variant="contained" color="success">Resume</Button>
-            </form>
+            <ResumeButton flowId={id} overdueCount={overdueCount} />
           )}
         </Stack>
       </Stack>

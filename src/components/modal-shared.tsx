@@ -3,7 +3,8 @@
  *  + one identity formatter — kept deliberately small (per the audit). */
 import { Box, Stack, Typography, Tooltip, IconButton, CircularProgress } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import type { CardAmount } from "@/lib/csv";
 
 type Tone = "success" | "error" | "warning" | "info" | "default";
 
@@ -195,18 +196,21 @@ export function CardIdentity({
   );
 }
 
-/** Visual credit-card representation. Shows cardholder name, masked PAN, exp,
- *  and CVV placeholder. Click the card to reveal the full PAN + CVV — calls
- *  the `onReveal` handler (server action that decrypts). Click again to mask.
- *  The CSV source filename shows at top-right, truncated when long. */
+/** Visual credit-card representation. Shows cardholder name, PAN, exp and CVV.
+ *  The full PAN + CVV are revealed automatically once on mount via the
+ *  `onReveal` handler (server action that decrypts) — nothing is clickable.
+ *  Top-left shows the card's balance type; top-right its initial + current
+ *  balance. */
 export function CardVisual({
-  last4, name, expMonth, expYear, sourceFile, onReveal,
+  last4, name, expMonth, expYear, amount, initialBal, currentBal, onReveal,
 }: {
   last4: string;
   name: string;
   expMonth: string;
   expYear: string;
-  sourceFile?: string;
+  amount: CardAmount;
+  initialBal: string;
+  currentBal: string;
   onReveal?: () => Promise<{ pan: string; cvv: string }>;
 }) {
   const exp = `${expMonth.padStart(2, "0")}/${expYear}`;
@@ -214,30 +218,29 @@ export function CardVisual({
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  async function handleClick() {
+  // Auto-reveal once on mount — decryption stays server-side in `onReveal`.
+  useEffect(() => {
     if (!onReveal) return;
-    setErr(null);
-    if (secrets) { setSecrets(null); return; }
+    let active = true;
     setLoading(true);
-    try {
-      const result = await onReveal();
-      setSecrets(result);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed to reveal");
-    } finally {
-      setLoading(false);
-    }
-  }
+    setErr(null);
+    onReveal()
+      .then(result => { if (active) setSecrets(result); })
+      .catch(e => { if (active) setErr(e instanceof Error ? e.message : "Failed to reveal"); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const formattedPan = secrets
     ? secrets.pan.replace(/(\d{4})(?=\d)/g, "$1 ")
     : `•••• •••• •••• ${last4}`;
   const cvvDisplay = secrets ? secrets.cvv : "•••";
   const panCopyValue = secrets ? secrets.pan : last4;
+  const balanceType = amount === "unlim" ? "UNLIMITED" : "HAS A BALANCE";
 
   return (
     <Box
-      onClick={handleClick}
       sx={{
         background: "linear-gradient(135deg, #2c3e50 0%, #1a252e 100%)",
         color: "white",
@@ -250,31 +253,33 @@ export function CardVisual({
         flexDirection: "column",
         justifyContent: "space-between",
         boxShadow: 3,
-        cursor: onReveal ? "pointer" : "default",
-        transition: "transform 120ms",
-        "&:hover": onReveal ? { transform: "translateY(-1px)" } : undefined,
       }}
     >
-      <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
         <Stack direction="row" alignItems="center" spacing={0.75}>
           <Typography variant="caption" sx={{ opacity: 0.6, letterSpacing: 1 }}>
-            {secrets ? "REVEALED" : "VIRTUAL CARD"}
+            {balanceType}
           </Typography>
           {loading && <CircularProgress size={10} sx={{ color: "white" }} />}
         </Stack>
-        {sourceFile && (
-          <Tooltip title={sourceFile}>
-            <Typography
-              variant="caption"
-              sx={{
-                opacity: 0.6, fontFamily: "monospace",
-                maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}
-            >
-              {sourceFile}
+        <Stack direction="row" spacing={2} sx={{ textAlign: "right" }}>
+          <Box>
+            <Typography variant="caption" sx={{ opacity: 0.55, letterSpacing: 1, display: "block" }}>
+              INITIAL BAL
             </Typography>
-          </Tooltip>
-        )}
+            <Typography variant="caption" sx={{ fontFamily: "monospace", display: "block" }}>
+              {initialBal}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="caption" sx={{ opacity: 0.55, letterSpacing: 1, display: "block" }}>
+              CURRENT BAL
+            </Typography>
+            <Typography variant="caption" sx={{ fontFamily: "monospace", display: "block" }}>
+              {currentBal}
+            </Typography>
+          </Box>
+        </Stack>
       </Stack>
 
       <Box>

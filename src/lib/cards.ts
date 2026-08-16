@@ -118,6 +118,54 @@ export type CardFields = {
   contact: { phone: string; email: string; ipAddress: string };
 };
 
+/** Initial + remaining balance for a single card, plus preformatted labels.
+ *  - initial   = the card's tagged `amount` (number | "unlim" | null).
+ *  - remaining = initial minus the summed prices of the card's LIVE charges
+ *    (same LIVE_CHARGE model as availability); "unlim"/null carry through. */
+export type CardBalances = {
+  initial: CardAmount;
+  remaining: CardAmount;
+  initialLabel: string;
+  remainingLabel: string;
+};
+
+/** Compact balance label: number → "$X.XX", "unlim" → "∞", null (untagged) → "—". */
+export function formatBalance(amount: CardAmount): string {
+  if (amount === "unlim") return "∞";
+  if (amount === null) return "—";
+  return `$${amount.toFixed(2)}`;
+}
+
+/** Initial + remaining balance for one card. Remaining = the card's numbered
+ *  `amount` minus the summed fire_plan prices of its live charges (pending /
+ *  processing / fired-succeeded — a failed fire frees its reservation, same
+ *  rule as NUMBERED_BRANCH). "unlim" and null (untagged) have no computed
+ *  remaining — they carry through unchanged. */
+export async function cardBalances(cardId: string): Promise<CardBalances> {
+  const rows = await db.$queryRawUnsafe<{ amount: string | number | null; amountType: string | null; spent: number }[]>(
+    `SELECT json_extract(c.card_data,'$.amount') AS amount,
+            typeof(json_extract(c.card_data,'$.amount')) AS amountType,
+            COALESCE(SUM(CASE WHEN ${LIVE_CHARGE} THEN CAST(json_extract(s.fire_plan,'$.price') AS REAL) ELSE 0 END), 0) AS spent
+       FROM cards c LEFT JOIN schedules s ON s.card_id = c.id
+      WHERE c.id = ? GROUP BY c.id`,
+    cardId,
+  );
+  const row = rows[0];
+  let initial: CardAmount = null;
+  let remaining: CardAmount = null;
+  if (row) {
+    if (row.amountType === "integer" || row.amountType === "real") {
+      initial = Number(row.amount);
+      remaining = initial - Number(row.spent);
+    } else if (row.amount === "unlim") {
+      initial = "unlim";
+      remaining = "unlim";
+    }
+    // else untagged (null) → both stay null
+  }
+  return { initial, remaining, initialLabel: formatBalance(initial), remainingLabel: formatBalance(remaining) };
+}
+
 /** Parse a `card_data` JSON blob into display fields. Used by both the card-
  *  detail and schedule-detail views so the flattening lives in one place. */
 export function flattenCardData(cardDataJson: string): CardFields {

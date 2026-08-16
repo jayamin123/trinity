@@ -1,12 +1,14 @@
 "use server";
 import { db } from "@/lib/db";
 import { parseFirePlan, parseFireAttempts } from "@/lib/flows";
-import { flattenCardData, type CardFields } from "@/lib/cards";
+import { flattenCardData, cardBalances, type CardFields, type CardBalances } from "@/lib/cards";
 import { decrypt } from "@/lib/crypto";
 
 export type CardDetail = CardFields & {
   cardId: string;
   last4: string;
+  /** Initial + remaining balance (+ preformatted labels). */
+  balances: CardBalances;
   /** Sorted: pending first (soonest first), then fired (most recent first). */
   schedules: ScheduleSummary[];
 };
@@ -80,6 +82,7 @@ export async function getCardDetail(cardId: string): Promise<CardDetail | null> 
   return {
     cardId: card.id,
     last4: card.panLast4,
+    balances: await cardBalances(card.id),
     ...flattenCardData(card.cardData),
     schedules,
   };

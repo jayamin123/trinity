@@ -7,6 +7,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import CreditCardIcon from "@mui/icons-material/CreditCard";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import HistoryIcon from "@mui/icons-material/History";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import VisibilityIcon from "@mui/icons-material/Visibility";
@@ -131,10 +132,10 @@ export default function CardModal({
                     })(),
               },
               {
-                icon: <CreditCardIcon />,
-                label: "Source",
-                value: detail.sourceFile || "—",
-                subtitle: detail.createdAt ? `uploaded ${dayjs.utc(detail.createdAt).format("MMM D")}` : "",
+                icon: <AccountBalanceWalletIcon />,
+                label: "Remaining balance",
+                value: detail.balances.remainingLabel,
+                subtitle: `initial ${detail.balances.initialLabel}`,
               },
             ]} />
 
@@ -160,20 +161,27 @@ export default function CardModal({
                 </SectionCard>
               </Box>
               <Box sx={{ flex: "0 0 auto", width: { xs: "100%", md: 400 } }}>
-                <SectionCard title="Virtual Card" icon={<CreditCardIcon />}>
+                <SectionCard title="Card Details" icon={<CreditCardIcon />}>
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
                     <CardVisual
                       last4={detail.last4}
                       name={detail.name}
                       expMonth={detail.expMonth}
                       expYear={detail.expYear}
-                      sourceFile={detail.sourceFile}
+                      amount={detail.amount}
+                      initialBal={detail.balances.initialLabel}
+                      currentBal={detail.balances.remainingLabel}
                       onReveal={() => revealCardSecretsByCardId(detail.cardId)}
                     />
                   </Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mt: 1.5 }}>
-                    Click card to reveal full PAN + CVV
-                  </Typography>
+                  <Tooltip title={detail.sourceFile || ""}>
+                    <Typography
+                      variant="caption" color="text.secondary"
+                      sx={{ display: "block", textAlign: "center", mt: 1.5, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    >
+                      {detail.sourceFile || "—"}
+                    </Typography>
+                  </Tooltip>
                 </SectionCard>
               </Box>
             </Stack>

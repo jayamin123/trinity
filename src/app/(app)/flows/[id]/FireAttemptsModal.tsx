@@ -369,20 +369,27 @@ function CardholderAndCard({ detail, onOpenCardModal }: { detail: ScheduleDetail
         </SectionCard>
       </Box>
       <Box sx={{ flex: "0 0 auto", width: { xs: "100%", md: 400 } }}>
-        <SectionCard title="Virtual Card" icon={<CreditCardIcon />}>
+        <SectionCard title="Card Details" icon={<CreditCardIcon />}>
           <Box sx={{ display: "flex", justifyContent: "center" }}>
             <CardVisual
               last4={detail.card.last4}
               name={detail.card.name}
               expMonth={detail.card.expMonth}
               expYear={detail.card.expYear}
-              sourceFile={detail.card.sourceFile}
+              amount={detail.card.amount}
+              initialBal={detail.balances.initialLabel}
+              currentBal={detail.balances.remainingLabel}
               onReveal={() => revealCardSecrets(detail.scheduleId)}
             />
           </Box>
-          <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", mt: 1.5 }}>
-            Click card to reveal full PAN + CVV
-          </Typography>
+          <Tooltip title={detail.card.sourceFile || ""}>
+            <Typography
+              variant="caption" color="text.secondary"
+              sx={{ display: "block", textAlign: "center", mt: 1.5, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            >
+              {detail.card.sourceFile || "—"}
+            </Typography>
+          </Tooltip>
         </SectionCard>
       </Box>
     </Stack>

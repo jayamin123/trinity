@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/lib/db";
 import { parseFirePlan, parseFireAttempts, parseFlowSettings, type CCProduct } from "@/lib/flows";
-import { flattenCardData, type CardFields } from "@/lib/cards";
+import { flattenCardData, cardBalances, type CardFields, type CardBalances } from "@/lib/cards";
 import { decrypt } from "@/lib/crypto";
 
 export type ScheduleDetail = {
@@ -18,6 +18,8 @@ export type ScheduleDetail = {
   attempts: ReturnType<typeof parseFireAttempts>;
   cardId: string;
   card: CardFields & { last4: string };
+  /** Initial + remaining balance for the card (+ preformatted labels). */
+  balances: CardBalances;
   flow: {
     ccCampaignName: string;
     ccGateway: { id: string; name: string };
@@ -52,6 +54,7 @@ export async function getScheduleDetail(scheduleId: string): Promise<ScheduleDet
       last4: s.card.panLast4,
       ...flattenCardData(s.card.cardData),
     },
+    balances: await cardBalances(s.card.id),
     flow: {
       ccCampaignName: flowSettings.cc_campaign.name,
       ccGateway: flowSettings.cc_gateway,

@@ -34,27 +34,97 @@ export async function pauseFlow(id: string) {
   revalidatePath(`/flows/${id}`);
 }
 
+/** Turn a paused flow back on. Never shifts schedule dates — planned dates are
+ *  respected as-is (a resume must not silently move the schedule). Overdue
+ *  (back-dated) cards are handled explicitly by the resume dialog, via
+ *  resumeFlowPoolOverdue / resumeFlowRescheduleOverdue. */
 export async function resumeFlow(id: string) {
+  await activateFlow(id);
+  revalidatePath(`/flows/${id}`);
+}
+
+/** Flip lifecycle to active + clear paused_at. Shared by all resume paths. */
+async function activateFlow(id: string) {
   const flow = await db.flow.findUnique({ where: { id } });
   if (!flow) return;
   const settings = parseFlowSettings(flow.flowSettings);
-  if (!settings.lifecycle.paused_at) return;
+  settings.lifecycle.status = "active";
+  settings.lifecycle.paused_at = null;
+  await db.flow.update({ where: { id }, data: { flowSettings: JSON.stringify(settings) } });
+}
 
-  const pauseMs = nowBkk().getTime() - new Date(settings.lifecycle.paused_at).getTime();
+/** Overdue = pending schedules whose scheduled_for is already in the past.
+ *  Drives whether Resume shows the overdue dialog. */
+export async function countOverduePending(flowId: string): Promise<number> {
+  return db.schedule.count({
+    where: { flowId, status: "pending", scheduledFor: { lt: nowBkk() } },
+  });
+}
 
-  // Shift pending schedules forward by the pause duration so nothing
-  // immediately fires after a long pause.
-  const pending = await db.schedule.findMany({
-    where: { flowId: id, status: "pending" },
+/** Resume, returning overdue cards to the pool: their schedules are deleted so
+ *  the cards become available again, and the flow's counts are decremented. */
+export async function resumeFlowPoolOverdue(id: string) {
+  const flow = await db.flow.findUnique({ where: { id } });
+  if (!flow) return;
+  const overdue = await db.schedule.findMany({
+    where: { flowId: id, status: "pending", scheduledFor: { lt: nowBkk() } },
+    select: { id: true, firePlan: true },
+  });
+  const settings = parseFlowSettings(flow.flowSettings);
+  for (const s of overdue) {
+    const prod = settings.cc_products.find(p => p.id === parseFirePlan(s.firePlan).product_id);
+    if (prod) prod.count = Math.max(0, prod.count - 1);
+  }
+  settings.total_cards = Math.max(0, settings.total_cards - overdue.length);
+  settings.lifecycle.status = "active";
+  settings.lifecycle.paused_at = null;
+  await db.schedule.deleteMany({ where: { id: { in: overdue.map(s => s.id) } } });
+  await db.flow.update({ where: { id }, data: { flowSettings: JSON.stringify(settings) } });
+  revalidatePath(`/flows/${id}`);
+  revalidatePath("/cards");
+}
+
+/** Resume, rescheduling overdue cards 1/day (no burst), preserving each card's
+ *  time-of-day. mode "nextDay" starts them tomorrow; "end" appends them after
+ *  the flow's last remaining card. */
+export async function resumeFlowRescheduleOverdue(id: string, mode: "nextDay" | "end") {
+  const flow = await db.flow.findUnique({ where: { id } });
+  if (!flow) return;
+  const now = nowBkk();
+  const overdue = await db.schedule.findMany({
+    where: { flowId: id, status: "pending", scheduledFor: { lt: now } },
+    orderBy: { scheduledFor: "asc" },
     select: { id: true, scheduledFor: true },
   });
-  await Promise.all(pending.map(s =>
-    db.schedule.update({
-      where: { id: s.id },
-      data: { scheduledFor: new Date(s.scheduledFor.getTime() + pauseMs) },
-    }),
-  ));
+  const settings = parseFlowSettings(flow.flowSettings);
 
+  if (overdue.length > 0) {
+    let anchor: Date;
+    if (mode === "end") {
+      const last = await db.schedule.findFirst({
+        where: { flowId: id, status: "pending", scheduledFor: { gte: now } },
+        orderBy: { scheduledFor: "desc" },
+        select: { scheduledFor: true },
+      });
+      anchor = new Date((last?.scheduledFor ?? now).getTime());
+    } else {
+      anchor = new Date(now.getTime());
+    }
+    // 1/day starting the day AFTER the anchor, keeping each card's time-of-day.
+    for (let i = 0; i < overdue.length; i++) {
+      const orig = new Date(overdue[i].scheduledFor.getTime());
+      const d = new Date(anchor.getTime());
+      d.setUTCDate(d.getUTCDate() + i + 1);
+      d.setUTCHours(orig.getUTCHours(), orig.getUTCMinutes(), orig.getUTCSeconds(), orig.getUTCMilliseconds());
+      await db.schedule.update({ where: { id: overdue[i].id }, data: { scheduledFor: d } });
+    }
+    // Extend the window end if the new tail runs past it.
+    const tail = new Date(anchor.getTime());
+    tail.setUTCDate(tail.getUTCDate() + overdue.length);
+    if (tail > new Date(settings.schedule_window.end_date)) {
+      settings.schedule_window.end_date = tail.toISOString();
+    }
+  }
   settings.lifecycle.status = "active";
   settings.lifecycle.paused_at = null;
   await db.flow.update({ where: { id }, data: { flowSettings: JSON.stringify(settings) } });
